@@ -15,6 +15,7 @@ window.API = (() => {
     no_questions: "لا توجد أسئلة لهذه المحاضرة بعد.",
     already_submitted: "تم تسليم هذا الاختبار مسبقًا.",
     bad_items: "تعذر حفظ الاختبار. أعد المحاولة.",
+    bad_phone: "رقم الجوال غير صحيح. اكتبه بالشكل 05xxxxxxxx.",
     attempt_not_found: "تعذر العثور على الاختبار. ابدأ اختبارًا جديدًا."
   };
   const friendly = msg => {
@@ -33,6 +34,10 @@ window.API = (() => {
     startQuiz: (nid, lid) => rpc("start_quiz", { p_nid: nid, p_lid: lid }),
     submitQuiz: (nid, attempt, answers) => rpc("submit_quiz", { p_attempt: attempt, p_nid: nid, p_answers: answers }),
     startPractice: (nid, lid) => rpc("start_practice", { p_nid: nid, p_lid: lid }),
+    login: nid => rpc("student_login", { p_nid: nid }),
+    publicSettings: () => rpc("public_settings", {}),
+    ping: (sid, nid) => rpc("student_ping", { p_session: sid, p_nid: nid }),
+    setPhone: (nid, phone) => rpc("set_phone", { p_nid: nid, p_phone: phone }),
     submitPractice: (nid, attempt, items, sec) => rpc("submit_practice", { p_attempt: attempt, p_nid: nid, p_items: items, p_duration: sec })
   };
 
@@ -58,7 +63,7 @@ window.API = (() => {
     return qs;
   }
   const QS = demoQuestions();
-  const SETTINGS = { pass_mark: 70, questions_per_quiz: 10, school_name: "ثانوية الأندلس بترقش", course_name: "تأسيس القدرات — القسم الكمي" };
+  const SETTINGS = { pass_mark: 70, questions_per_quiz: 10, access_mode: "pass", platform_name: "منصة إتقان", school_name: "ثانوية الأندلس بترقش", course_name: "تأسيس القدرات — القسم الكمي" };
   const load = () => { try { return JSON.parse(localStorage.getItem("andalus-demo")) || { views: [], attempts: [] }; } catch { return { views: [], attempts: [] }; } };
   const save = st => { try { localStorage.setItem("andalus-demo", JSON.stringify(st)); } catch {} };
   const qCount = lid => QS.filter(q => q.lecture_id === lid).length;
@@ -73,6 +78,20 @@ window.API = (() => {
   }
   const wait = () => new Promise(r => setTimeout(r, 150));
   const demoApi = {
+    async publicSettings() { return SETTINGS; },
+    async login(nid) {
+      await wait(); const st = load();
+      if (!DEMO_STUDENTS.some(x => x.national_id === nid)) return null;
+      const id = "s-" + Date.now(); (st.sessions ||= []).push({ id, nid, seconds: 0, last: Date.now() }); save(st); return id;
+    },
+    async ping(sid, nid) {
+      const st = load(); const x = (st.sessions || []).find(s => s.id === sid && s.nid === nid); if (!x) return null;
+      x.seconds += Math.min(75, Math.max(0, (Date.now() - x.last) / 1000)) | 0; x.last = Date.now(); save(st); return true;
+    },
+    async setPhone(nid, phone) {
+      await wait(); if (!/^05\d{8}$/.test(phone)) throw new Error(ERRORS.bad_phone);
+      const st = load(); (st.phones ||= {})[nid] = phone; save(st); return true;
+    },
     async startPractice(nid, lid) {
       await wait(); const st = load();
       if (!unlocked(st, nid, lid)) throw new Error(ERRORS.lecture_locked);
@@ -95,9 +114,13 @@ window.API = (() => {
       await wait();
       const s = DEMO_STUDENTS.find(x => x.national_id === nid); if (!s) return null;
       const st = load();
-      return { student: s, files: [], settings: SETTINGS, lectures: window.LECTURES.map(l => {
+      const mine = st.attempts.filter(a => a.nid === nid && a.submitted).map(a => a.percent);
+      const ses = (st.sessions || []).filter(x => x.nid === nid);
+      const stats = { logins: ses.length, seconds: ses.reduce((t, x) => t + x.seconds, 0), tests: mine.length,
+        max: mine.length ? Math.max(...mine) : null, min: mine.length ? Math.min(...mine) : null, avg: mine.length ? Math.round(mine.reduce((a, b) => a + b, 0) / mine.length) : null };
+      return { student: { ...s, phone: (st.phones || {})[nid] || null }, stats, files: [], settings: SETTINGS, lectures: window.LECTURES.map(l => {
         const mine = st.attempts.filter(a => a.nid === nid && a.lid === l.id && a.submitted);
-        return { ...l, exam_mode: window.EXAMS && window.EXAMS[l.id] ? "generated" : "bank", question_count: qCount(l.id), watched: st.views.some(v => v.nid === nid && v.lid === l.id),
+        return { ...l, unlocked: unlocked(st, nid, l.id), exam_mode: window.EXAMS && window.EXAMS[l.id] ? "generated" : "bank", question_count: qCount(l.id), watched: st.views.some(v => v.nid === nid && v.lid === l.id),
           done: done(st, nid, l.id), best: mine.length ? Math.max(...mine.map(a => a.percent)) : null, attempts_count: mine.length };
       }) };
     },

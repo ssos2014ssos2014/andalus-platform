@@ -2,7 +2,7 @@
   const app = document.getElementById("app");
   const sb = API.sb;
   const LETTERS = ["أ", "ب", "ج", "د", "هـ", "و"];
-  const A = { tab: "students", msg: null, lectures: [], qLecture: 1, editQ: null, importPreview: null, qPreview: null, pdfStudents: null };
+  const A = { tab: "dashboard", msg: null, lectures: [], qLecture: 1, editQ: null, importPreview: null, qPreview: null, pdfStudents: null };
   const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now() + "-" + Math.random().toString(16).slice(2));
   const isPdf = f => /\.pdf$/i.test(f.name) || f.type === "application/pdf";
   async function uploadPdf(bucket, folder, file) {
@@ -12,6 +12,17 @@
     const { error } = await sb.storage.from(bucket).upload(path, file, { contentType: "application/pdf", upsert: false });
     if (error) throw new Error(error.message.includes("Bucket not found") ? "مخازن الملفات غير موجودة. شغّل ملف update-pdf.sql في Supabase أولًا." : error.message);
     return { path, url: sb.storage.from(bucket).getPublicUrl(path).data.publicUrl };
+  }
+  const AR = v => String(v ?? "").replace(/[0-9]/g, c => "٠١٢٣٤٥٦٧٨٩"[c]);
+  const dur = sec => { sec = Math.round(sec || 0); const hh = Math.floor(sec / 3600), mm = Math.floor(sec % 3600 / 60); return hh ? `${AR(hh)} س ${AR(mm)} د` : `${AR(mm)} د`; };
+  const WA_ICON = '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2zm5.3 14.1c-.2.6-1.3 1.2-1.8 1.3-.5.1-1 .1-3.3-.8-2.8-1.1-4.5-4-4.7-4.2-.1-.2-1.1-1.5-1.1-2.9s.7-2 1-2.3c.2-.3.5-.3.7-.3h.5c.2 0 .4 0 .6.5l.9 2.1c.1.2.1.4 0 .5l-.4.6-.4.4c-.1.1-.3.3-.1.6.2.3.8 1.3 1.7 2.1 1.2 1 2.1 1.3 2.4 1.5.3.1.5.1.6-.1l.9-1c.2-.3.4-.2.7-.1l2 1c.3.1.5.2.5.3.1.2.1.7-.1 1.2z"/></svg>';
+  function wa(phone, name, text) {
+    const p = String(phone || "").replace(/\D/g, "");
+    const intl = p.startsWith("05") ? "966" + p.slice(1) : p.startsWith("5") && p.length === 9 ? "966" + p : p;
+    const a = h("a", { class: "wa" + (p ? "" : " off"), target: "_blank", rel: "noopener", title: p ? "مراسلة " + name + " على واتساب" : "لا يوجد رقم جوال",
+      "aria-label": p ? "مراسلة " + name + " على واتساب" : "لا يوجد رقم جوال لـ " + name,
+      href: p ? `https://wa.me/${intl}?text=${encodeURIComponent(text || `السلام عليكم ${name}،\n`)}` : null });
+    a.innerHTML = WA_ICON; return a;
   }
   const baseName = n => n.replace(/\.pdf$/i, "").replace(/[_]+/g, " ").trim();
 
@@ -47,6 +58,7 @@
     const { data: ok } = await sb.rpc("is_admin");
     if (!ok) return viewLogin("هذا الحساب ليس ضمن حسابات المعلمين المسجلة في جدول admins.");
     const { data: ls } = await sb.from("lectures").select("*").order("id");
+    const { data: st } = await sb.from("settings").select("*").eq("id", 1).single(); A.settings = st || {};
     A.lectures = ls || [];
     render();
   }
@@ -68,12 +80,12 @@
   }
 
   // ---------- الإطار ----------
-  const TABS = [["students", "الطلاب"], ["questions", "الأسئلة"], ["lectures", "المحاضرات"], ["results", "النتائج"], ["settings", "الإعدادات"]];
+  const TABS = [["dashboard", "لوحة المؤشرات"], ["students", "الطلاب"], ["questions", "الأسئلة"], ["lectures", "المحاضرات"], ["results", "النتائج"], ["settings", "الإعدادات"]];
   async function render() {
     const body = h("div", null, h("div", { class: "loading" }, "جارٍ التحميل…"));
     app.replaceChildren(
       h("header", { class: "band" }, h("div", { class: "band-inner" },
-        h("div", { class: "brand" }, "لوحة المعلم", h("small", null, "منصة تأسيس القدرات")),
+        h("div", { class: "brand" }, (() => { const m = h("span", { class: "mark" }); m.innerHTML = '<svg viewBox="0 0 48 48" aria-hidden="true"><path d="M24 3l6.2 14.8L45 24l-14.8 6.2L24 45l-6.2-14.8L3 24l14.8-6.2z" fill="currentColor"/><rect x="15" y="15" width="18" height="18" transform="rotate(45 24 24)" fill="none" stroke="var(--tile-deep)" stroke-width="2.4"/></svg>'; return m; })(), h("div", null, (A.settings && A.settings.platform_name) || "منصة إتقان", h("small", null, "لوحة المعلم"))),
         h("div", { class: "spacer" }),
         h("a", { class: "btn ghost sm", href: "index.html", target: "_blank" }, "صفحة الطالب"),
         h("button", { class: "btn ghost sm", onclick: async () => { await sb.auth.signOut(); viewLogin(); } }, "تسجيل الخروج"))),
@@ -81,7 +93,7 @@
         h("nav", { class: "tabsbar", role: "tablist" }, TABS.map(([k, t]) =>
           h("button", { role: "tab", "aria-selected": String(A.tab === k), onclick: () => { A.tab = k; A.msg = null; render(); } }, t))),
         msgBox(), body));
-    const fn = { students: tabStudents, questions: tabQuestions, lectures: tabLectures, results: tabResults, settings: tabSettings }[A.tab];
+    const fn = { dashboard: tabDashboard, students: tabStudents, questions: tabQuestions, lectures: tabLectures, results: tabResults, settings: tabSettings }[A.tab];
     try { body.replaceChildren(...[await fn()].flat()); }
     catch (e) { body.replaceChildren(h("div", { class: "alert err" }, "تعذر تحميل البيانات: " + e.message)); }
   }
@@ -92,20 +104,55 @@
     return XLSX.utils.sheet_to_json(ws, { header: 1, defval: "", raw: false }).filter(r => r.some(c => cell(c) !== ""));
   }
 
+  // ---------- لوحة المؤشرات ----------
+  async function tabDashboard() {
+    const { data: D, error } = await sb.rpc("admin_dashboard");
+    if (error) throw new Error(error.message.includes("admin_dashboard") ? "شغّل ملف update-v3.sql في Supabase أولًا." : error.message);
+    const kpi = (k, v, s) => h("div", { class: "stat" }, h("div", { class: "v" }, v), h("div", { class: "k" }, k), s && h("div", { class: "s" }, s));
+    const list = (title, rows, val, note) => h("section", { class: "panel" },
+      h("h3", null, title), note && h("p", { class: "small muted", style: "margin-top:-4px" }, note),
+      rows.length ? h("ol", { class: "rank" }, rows.map(r => h("li", null,
+        h("span", { class: "nm", title: r.full_name }, r.full_name), h("span", { class: "val" }, val(r)), wa(r.phone, r.full_name))))
+        : h("p", { class: "muted small" }, "لا توجد بيانات بعد."));
+    return [
+      h("div", { class: "kpis" },
+        kpi("الطلاب المسجلون", AR(D.students), `${AR(D.with_phone)} أضافوا رقم الجوال`),
+        kpi("الطلاب الذين دخلوا", AR(D.active), `${AR(D.students ? Math.round(D.active * 100 / D.students) : 0)}٪ من الطلاب`),
+        kpi("دخلوا اليوم", AR(D.today)),
+        kpi("إجمالي مرات الدخول", AR(D.logins)),
+        kpi("إجمالي الوقت لجميع الطلاب", dur(D.seconds)),
+        kpi("متوسط وقت الطالب", dur(D.active ? D.seconds / D.active : 0), "للطلاب الذين دخلوا"),
+        kpi("إجمالي الاختبارات", AR(D.tests)),
+        kpi("متوسط الدرجات", D.avg == null ? "—" : AR(D.avg) + "٪")),
+      h("div", { class: "tops" },
+        list("الأكثر دخولًا", D.top_logins, r => `${AR(r.logins)} مرة`),
+        list("الأطول بقاءً في المنصة", D.top_time, r => dur(r.seconds)),
+        list("الأكثر محاولات للاختبارات", D.top_tests, r => `${AR(r.tests)} اختبار`),
+        list("الأعلى درجات", D.top_scores, r => `${AR(r.avg)}٪`, "حسب متوسط درجات الاختبارات"),
+        list("الأدنى درجات", D.low_scores, r => `${AR(r.avg)}٪`, "يحتاجون متابعة، راسلهم من زر واتساب"))];
+  }
+
   // ---------- الطلاب ----------
   async function tabStudents() {
     const { count } = await sb.from("students").select("*", { count: "exact", head: true });
     const search = h("input", { type: "text", placeholder: "ابحث بالاسم أو رقم الهوية" });
     const list = h("div");
     async function load() {
-      let q = sb.from("students").select("national_id, full_name, details, student_files(id, title, url, path)").order("full_name").limit(100);
+      let q = sb.from("students").select("national_id, full_name, phone, details, student_files(id, title, url, path)").order("full_name").limit(100);
       const t = search.value.trim();
       if (t) q = q.or(`full_name.ilike.%${t.replace(/[%,()]/g, "")}%,national_id.ilike.%${toLatinDigits(t).replace(/[%,()]/g, "")}%`);
       const { data, error } = await q; if (error) throw error;
       list.replaceChildren(data.length ? h("div", { class: "table-wrap" }, h("table", null,
-        h("thead", null, h("tr", null, h("th", null, "الاسم"), h("th", null, "رقم الهوية"), h("th", null, "البيانات"), h("th", null, "الملفات"), h("th", null, ""))),
+        h("thead", null, h("tr", null, h("th", null, "الاسم"), h("th", null, "رقم الهوية"), h("th", null, "الجوال"), h("th", null, "البيانات"), h("th", null, "الملفات"), h("th", null, ""))),
         h("tbody", null, data.map(s => h("tr", null,
           h("td", null, s.full_name), h("td", null, s.national_id),
+          h("td", { class: "small", style: "white-space:nowrap" }, h("div", { class: "row", style: "gap:6px;flex-wrap:nowrap" }, wa(s.phone, s.full_name), s.phone || "—",
+            h("button", { class: "linkbtn", onclick: async () => {
+              const v = prompt("رقم جوال الطالب (05xxxxxxxx)، اتركه فارغًا للحذف:", s.phone || ""); if (v == null) return;
+              const p = toLatinDigits(v); if (p && !/^05\d{8}$/.test(p)) return flash("err", "رقم الجوال يجب أن يكون 10 أرقام ويبدأ بـ 05.");
+              const { error } = await sb.from("students").update({ phone: p || null }).eq("national_id", s.national_id);
+              error ? flash("err", error.message) : flash("ok", "تم حفظ رقم الجوال.");
+            } }, "تعديل"))),
           h("td", { class: "small" }, (s.details || []).map(d => `${d.k}: ${d.v}`).join("، ")),
           h("td", { class: "small" }, (s.student_files || []).map(f => h("div", null,
             h("a", { href: f.url, target: "_blank", rel: "noopener" }, f.title), " ",
@@ -115,7 +162,11 @@
               const { error } = await sb.from("student_files").delete().eq("id", f.id);
               error ? flash("err", error.message) : flash("ok", "تم حذف الملف.");
             } }, "×")))),
-          h("td", null, h("button", { class: "btn danger sm", onclick: async () => {
+          h("td", { style: "white-space:nowrap" }, h("button", { class: "btn ghost sm", onclick: async () => {
+            if (!confirm(`حذف جميع اختبارات ${s.full_name}؟ تعود محاضراته مقفلة حسب طريقة الفتح، ولا يمكن التراجع.`)) return;
+            const { error, count } = await sb.from("attempts").delete({ count: "exact" }).eq("national_id", s.national_id);
+            error ? flash("err", error.message) : flash("ok", `تم حذف ${count ?? ""} اختبار للطالب.`);
+          } }, "حذف اختباراته"), " ", h("button", { class: "btn danger sm", onclick: async () => {
             if (!confirm(`حذف الطالب ${s.full_name} ونتائجه؟`)) return;
             const { error } = await sb.from("students").delete().eq("national_id", s.national_id);
             error ? flash("err", error.message) : flash("ok", "تم حذف الطالب.");
@@ -140,7 +191,7 @@
             if (rows.length < 2) return flash("err", "الملف لا يحتوي على بيانات بعد صف العناوين.");
             const headers = rows[0].map(cell);
             const find = re => Math.max(0, headers.findIndex(x => re.test(x)));
-            A.importPreview = { headers, rows: rows.slice(1), idCol: find(/هوي|سجل|إقام|اقام|national|id/i), nameCol: find(/اسم|name/i) };
+            A.importPreview = { headers, rows: rows.slice(1), idCol: find(/هوي|سجل|إقام|اقام|national|id/i), nameCol: find(/اسم|name/i), phoneCol: headers.findIndex(x => /جوال|هاتف|mobile|phone/i.test(x)) };
             render();
           } catch (err) { flash("err", "تعذرت قراءة الملف: " + err.message); }
         } }),
@@ -159,8 +210,12 @@
     for (const r of P.rows) {
       const nid = toLatinDigits(r[P.idCol]).replace(/\.0+$/, ""), name = cell(r[P.nameCol]);
       if (!/^\d{5,14}$/.test(nid) || !name) { bad.push(r); continue; }
-      recs.push({ national_id: nid, full_name: name,
-        details: P.headers.map((k, i) => ({ k: k || `عمود ${i + 1}`, v: cell(r[i]) })).filter((d, i) => i !== P.idCol && i !== P.nameCol && d.v !== "") });
+      let ph = P.phoneCol >= 0 ? toLatinDigits(r[P.phoneCol]).replace(/\.0+$/, "") : "";
+      if (/^5\d{8}$/.test(ph)) ph = "0" + ph; if (/^9665\d{8}$/.test(ph)) ph = "0" + ph.slice(3);
+      const rec = { national_id: nid, full_name: name,
+        details: P.headers.map((k, i) => ({ k: k || `عمود ${i + 1}`, v: cell(r[i]) })).filter((d, i) => i !== P.idCol && i !== P.nameCol && i !== P.phoneCol && d.v !== "") };
+      if (/^05\d{8}$/.test(ph)) rec.phone = ph;
+      recs.push(rec);
     }
     const uniq = Object.values(Object.fromEntries(recs.map(r => [r.national_id, r])));
     return h("div", { style: "margin-top:16px" },
@@ -222,17 +277,17 @@
           const one = toLatinDigits(nid.value);
           e.target.disabled = true;
           const { data: studs } = one ? await sb.from("students").select("national_id").eq("national_id", one)
-            : await sb.from("students").select("national_id").in("national_id", list.map(f => (toLatinDigits(f.name).match(/[12]\d{9}/) || [""])[0]).filter(Boolean));
+            : await sb.from("students").select("national_id").in("national_id", list.map(f => (toLatinDigits(f.name).match(/\d{10}/) || [""])[0]).filter(Boolean));
           const known = new Set((studs || []).map(s => s.national_id));
           if (one && !known.has(one)) { e.target.disabled = false; return flash("err", "رقم الهوية غير مسجل في الطلاب."); }
           let done = 0; const skipped = [];
           for (const f of list) {
-            const id = one || (toLatinDigits(f.name).match(/[12]\d{9}/) || [""])[0];
+            const id = one || (toLatinDigits(f.name).match(/\d{10}/) || [""])[0];
             if (!known.has(id)) { skipped.push(f.name); continue; }
             status.textContent = `جارٍ رفع ${done + 1} من ${list.length}…`;
             try {
               const up = await uploadPdf("student-files", id, f);
-              const t = title.value.trim() || baseName(f.name).replace(/[12]\d{9}/, "").replace(/^[\s\-–_]+|[\s\-–_]+$/g, "") || "ملف";
+              const t = title.value.trim() || baseName(f.name).replace(/\d{10}/, "").replace(/^[\s\-–_]+|[\s\-–_]+$/g, "") || "ملف";
               const { error } = await sb.from("student_files").insert({ national_id: id, title: t, path: up.path, url: up.url });
               if (error) throw error;
               done++;
@@ -405,19 +460,27 @@
     const out = h("div");
     let rows = [];
     async function load() {
-      let q = sb.from("attempts").select("submitted_at, national_id, lecture_id, score, total, percent, passed, students(full_name)")
+      let q = sb.from("attempts").select("id, submitted_at, national_id, lecture_id, score, total, percent, passed, students(full_name, phone)")
         .not("submitted_at", "is", null).order("submitted_at", { ascending: false }).limit(1000);
       if (f.value.trim()) q = q.eq("national_id", toLatinDigits(f.value));
       if (ls.value) q = q.eq("lecture_id", +ls.value);
       const { data, error } = await q; if (error) throw error;
       rows = data;
       out.replaceChildren(data.length ? h("div", { class: "table-wrap" }, h("table", null,
-        h("thead", null, h("tr", null, ["التاريخ", "الطالب", "رقم الهوية", "المحاضرة", "الدرجة", "النسبة", "النتيجة"].map(x => h("th", null, x)))),
+        h("thead", null, h("tr", null, ["التاريخ", "الطالب", "رقم الهوية", "المحاضرة", "الدرجة", "النسبة", "النتيجة", ""].map(x => h("th", null, x)))),
         h("tbody", null, data.map(r => h("tr", null,
           h("td", { class: "small" }, new Date(r.submitted_at).toLocaleString("ar-SA-u-nu-latn")),
           h("td", null, r.students?.full_name || ""), h("td", null, r.national_id),
           h("td", null, r.lecture_id), h("td", null, `${r.score}/${r.total}`), h("td", null, r.percent + "%"),
-          h("td", { class: r.passed ? "chip-pass" : "chip-fail" }, r.passed ? "اجتاز" : "يحتاج مراجعة"))))))
+          h("td", { class: r.passed ? "chip-pass" : "chip-fail" }, r.passed ? "اجتاز" : "يحتاج مراجعة"),
+          h("td", { style: "white-space:nowrap" }, h("div", { class: "row", style: "gap:6px;flex-wrap:nowrap" },
+            wa(r.students?.phone, r.students?.full_name || "", `السلام عليكم ${r.students?.full_name || ""}،\nنتيجتك في اختبار المحاضرة ${r.lecture_id}: ${r.score} من ${r.total} (${r.percent}%).\n`),
+            h("button", { class: "btn ghost sm", "aria-label": "حذف هذا الاختبار", onclick: async () => {
+              if (!confirm(`حذف اختبار ${r.students?.full_name || r.national_id} في المحاضرة ${r.lecture_id}؟`)) return;
+              const { error } = await sb.from("attempts").delete().eq("id", r.id);
+              if (error) return flash("err", error.message);
+              load().catch(e => flash("err", e.message));
+            } }, "حذف"))))))))
         : h("p", { class: "muted" }, "لا توجد اختبارات مسلَّمة بهذه الشروط بعد."));
     }
     await load();
@@ -441,13 +504,19 @@
     const qn = h("input", { type: "number", min: "1", max: "100", value: String(s.questions_per_quiz) });
     const sn = h("input", { type: "text", value: s.school_name });
     const cn = h("input", { type: "text", value: s.course_name });
+    const pn = h("input", { type: "text", value: s.platform_name || "منصة إتقان" });
+    const am = h("select", null, [["pass", "مرتبطة باجتياز اختبار المحاضرة السابقة بنسبة الاجتياز"], ["watch", "تُفتح تباعًا بعد مشاهدة المحاضرة السابقة"], ["open", "جميع المحاضرات مفتوحة للطلاب"]]
+      .map(([v, t]) => h("option", { value: v, selected: (s.access_mode || "pass") === v }, t)));
     return h("form", { class: "panel", onsubmit: async e => {
       e.preventDefault();
-      const { error } = await sb.from("settings").update({ pass_mark: +pm.value, questions_per_quiz: +qn.value, school_name: sn.value.trim(), course_name: cn.value.trim() }).eq("id", 1);
+      const { error } = await sb.from("settings").update({ pass_mark: +pm.value, questions_per_quiz: +qn.value, school_name: sn.value.trim(), course_name: cn.value.trim(), platform_name: pn.value.trim() || "منصة إتقان", access_mode: am.value }).eq("id", 1);
       error ? flash("err", error.message) : flash("ok", "تم حفظ الإعدادات.");
     } },
       h("h2", null, "الإعدادات"),
+      h("label", { class: "field" }, h("span", null, "طريقة فتح المحاضرات للطلاب"), am),
+      h("p", { class: "small muted", style: "margin-top:-6px" }, "عند الربط بالاجتياز تُفتح المحاضرة التالية حين يحصل الطالب على نسبة الاجتياز المحددة أدناه أو أعلى."),
       h("div", { class: "grid2" },
+        h("label", { class: "field" }, h("span", null, "اسم المنصة (يظهر أعلى الصفحات)"), pn),
         h("label", { class: "field" }, h("span", null, "نسبة الاجتياز (%)"), pm),
         h("label", { class: "field" }, h("span", null, "عدد أسئلة كل اختبار"), qn),
         h("label", { class: "field" }, h("span", null, "اسم المدرسة"), sn),

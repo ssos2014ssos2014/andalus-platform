@@ -20,11 +20,11 @@
     get: k => { try { return sessionStorage.getItem(k); } catch { return null; } },
     set: (k, v) => { try { v == null ? sessionStorage.removeItem(k) : sessionStorage.setItem(k, v); } catch {} }
   };
-  const settings = () => (S.data && S.data.settings) || { pass_mark: 70, questions_per_quiz: 10, school_name: "ثانوية الأندلس بترقش", course_name: "تأسيس القدرات — القسم الكمي" };
+  const settings = () => (S.data && S.data.settings) || S.pub || { pass_mark: 70, questions_per_quiz: 10, platform_name: "منصة إتقان", access_mode: "pass", school_name: "ثانوية الأندلس بترقش", course_name: "تأسيس القدرات — القسم الكمي" };
   function lectures() {
     let prevDone = true;
     return (S.data?.lectures || []).map(l => {
-      const state = l.done ? "done" : prevDone ? "open" : "locked";
+      const state = l.done ? "done" : (l.unlocked ?? prevDone) ? "open" : "locked";
       prevDone = l.done;
       return { ...l, state };
     });
@@ -33,17 +33,18 @@
   const nextOf = id => lectures().find(l => l.id > id);
   function go(view, extra) { Object.assign(S, { view, error: "" }, extra || {}); render(); window.scrollTo(0, 0); }
   async function refresh() { S.data = await API.portal(S.nid); }
+  async function refresh0(nid, data) { S.nid = nid; S.data = await API.portal(nid) || data; }
 
   function band() {
     const st = settings();
     return h("header", { class: "band" },
       h("div", { class: "band-inner" },
-        h("div", { class: "brand" }, st.school_name, h("small", null, st.course_name)),
+        h("div", { class: "brand" }, mark(), h("div", null, st.platform_name || "منصة إتقان", h("small", null, `${st.school_name} · ${st.course_name}`))),
         h("div", { class: "spacer" }),
         S.data && h("span", { class: "who" }, S.data.student.full_name),
         S.data && h("button", { class: "btn ghost sm", onclick: logout }, "تسجيل الخروج")));
   }
-  function logout() { ss.set("andalus-nid", null); Object.assign(S, { nid: null, data: null, quiz: null, result: null }); go("login"); }
+  function logout() { ss.set("andalus-nid", null); ss.set("andalus-sid", null); clearInterval(pingTimer); Object.assign(S, { nid: null, data: null, quiz: null, result: null }); go("login"); }
 
   // ---------- الدخول ----------
   function viewLogin() {
@@ -59,7 +60,8 @@
       try {
         const data = await API.portal(nid);
         if (!data) { S.error = "رقم الهوية غير مسجل في الدورة. تأكد من الرقم أو راجع معلمك."; return render(); }
-        Object.assign(S, { nid, data }); ss.set("andalus-nid", nid); go("home");
+        try { const sid = await API.login(nid); if (sid) ss.set("andalus-sid", sid); await refresh0(nid, data); } catch { Object.assign(S, { nid, data }); }
+        ss.set("andalus-nid", nid); startPing(); go(S.data.student.phone ? "home" : "phone");
       } catch (err) { S.error = err.message; render(); }
     } },
       S.error && h("div", { class: "alert err", role: "alert" }, S.error),
@@ -68,7 +70,7 @@
     setTimeout(() => input.focus(), 0);
     return [band(), h("main", { class: "wrap narrow" },
       h("section", { class: "login-hero" },
-        h("h1", null, st.course_name),
+        mark(), h("h1", null, st.platform_name || "منصة إتقان"), h("p", { class: "eyebrow", style: "justify-content:center" }, `${st.school_name} · ${st.course_name}`),
         h("p", null, "شاهد المحاضرة، ثم اختبر نفسك. تنتقل للمحاضرة التالية حين تجتاز اختبار المحاضرة الحالية.")),
       h("div", { class: "panel login-card" }, form,
         !API.live && h("p", { class: "small muted", style: "margin:14px 0 0" },
@@ -76,40 +78,118 @@
   }
 
   // ---------- الرئيسية ----------
+  const AR = s => String(s).replace(/[0-9]/g, c => "٠١٢٣٤٥٦٧٨٩"[c]);
+  const dur = sec => { sec = Math.round(sec || 0); const hh = Math.floor(sec / 3600), mm = Math.floor(sec % 3600 / 60);
+    return hh ? `${AR(hh)} س ${AR(mm)} د` : mm ? `${AR(mm)} دقيقة` : sec ? "أقل من دقيقة" : `${AR(0)} د`; };
+  const pct = v => v == null ? "—" : AR(v) + "٪";
+  const MARK = '<svg viewBox="0 0 48 48" aria-hidden="true"><path d="M24 3l6.2 14.8L45 24l-14.8 6.2L24 45l-6.2-14.8L3 24l14.8-6.2z" fill="currentColor"/><rect x="15" y="15" width="18" height="18" transform="rotate(45 24 24)" fill="none" stroke="var(--tile-deep)" stroke-width="2.4"/></svg>';
+  function mark() { const s = h("span", { class: "mark" }); s.innerHTML = MARK; return s; }
+
   function viewHome() {
-    const s = S.data.student, ls = lectures();
-    const doneCount = ls.filter(l => l.done).length;
-    const current = ls.find(l => l.state === "open");
-    const initial = (s.full_name || "؟").trim().charAt(0);
-    const details = (Array.isArray(s.details) ? s.details : []).filter(d => d && d.v !== "" && d.v != null);
+    const s = S.data.student, st = S.data.stats || {}, ls = lectures();
+    const doneCount = ls.filter(l => l.done).length, watched = ls.filter(l => l.watched).length;
+    const current = ls.find(l => l.state === "open" && !l.done) || ls.find(l => l.state === "open");
+    const first = (s.full_name || "").trim().split(/\s+/)[0];
+    const details = (Array.isArray(s.details) ? s.details : []).filter(d => d && d.v !== "" && d.v != null && !/جوال|هاتف/.test(d.k));
+    const f = S.filter || "all";
+    const shown = ls.filter(l => f === "all" || (f === "open" && l.state === "open" && !l.done) || (f === "done" && l.done));
+    const groups = [];
+    for (const l of shown) { const g = Math.floor((l.id - 1) / 10); (groups[g] ||= []).push(l); }
+    const ACCESS = { open: "جميع المحاضرات مفتوحة لك.", watch: "تُفتح كل محاضرة بعد مشاهدة التي قبلها.", pass: `تُفتح كل محاضرة بعد اجتياز اختبار التي قبلها بنسبة ${AR(settings().pass_mark)}٪.` };
+
+    const tile = (label, value, sub) => h("div", { class: "stat" }, h("div", { class: "v" }, value), h("div", { class: "k" }, label), sub && h("div", { class: "s" }, sub));
+    const card = l => h("li", null, h("button", { class: "lcard " + l.state + (l.done ? " is-done" : ""), disabled: l.state === "locked",
+        onclick: () => go("lecture", { lid: l.id, part: 0 }), "aria-label": `${l.title}، ${l.done ? "مكتملة" : l.state === "locked" ? "مقفلة" : "متاحة"}` },
+      h("div", { class: "lc-top" },
+        h("span", { class: "lc-num" }, AR(String(l.id).padStart(2, "0"))),
+        h("span", { class: "chip " + (l.done ? "done" : l.state) }, l.done ? "مكتملة ✓" : l.state === "locked" ? "🔒 مقفلة" : l.watched ? "شاهدتها" : "متاحة")),
+      h("div", { class: "lc-title" }, l.title),
+      h("div", { class: "lc-topic" }, l.topic || (l.state === "locked" ? "" : "شاهد المحاضرة ثم اختبر نفسك")),
+      h("div", { class: "lc-foot" },
+        h("span", null, l.parts.length > 1 ? `🎬 ${AR(l.parts.length)} أجزاء` : "🎬 مقطع"),
+        l.exam_mode === "generated" ? h("span", null, "📝 اختبار محاكي") : l.question_count ? h("span", null, "📝 اختبار") : null,
+        l.best != null && h("span", { class: "best" }, "أفضل " + pct(l.best))),
+      l.best != null && h("div", { class: "lc-bar" }, h("i", { style: `width:${l.best}%` }))));
 
     return [band(), h("main", { class: "wrap" },
+      h("section", { class: "hero" },
+        h("div", { class: "hero-text" },
+          h("p", { class: "eyebrow" }, settings().course_name),
+          h("h1", null, `مرحبًا ${first} 👋`),
+          h("p", null, doneCount ? `أكملت ${AR(doneCount)} من ${AR(ls.length)} محاضرة. واصل، أنت على الطريق الصحيح.` : "ابدأ رحلتك في تأسيس القدرات من المحاضرة الأولى."),
+          h("div", { class: "progress" },
+            h("div", { class: "bar", role: "progressbar", "aria-valuemin": "0", "aria-valuemax": String(ls.length), "aria-valuenow": String(doneCount) },
+              h("i", { style: `width:${ls.length ? doneCount * 100 / ls.length : 0}%` })),
+            h("span", { class: "small" }, `${AR(Math.round(ls.length ? doneCount * 100 / ls.length : 0))}٪`))),
+        current && h("button", { class: "next-card", onclick: () => go("lecture", { lid: current.id, part: 0 }) },
+          h("span", { class: "small" }, doneCount ? "تابع من حيث توقفت" : "ابدأ من هنا"),
+          h("span", { class: "nc-num" }, AR(String(current.id).padStart(2, "0"))),
+          h("span", { class: "nc-title" }, current.title),
+          current.topic && h("span", { class: "small" }, current.topic),
+          h("span", { class: "nc-go" }, "ادخل المحاضرة ←"))),
+
+      h("section", { class: "stats", "aria-label": "إحصاءاتي" },
+        tile("مرات الدخول", AR(st.logins || 0)),
+        tile("وقتك في المنصة", dur(st.seconds)),
+        tile("الاختبارات", AR(st.tests || 0), `شاهدت ${AR(watched)} محاضرة`),
+        tile("أعلى درجة", pct(st.max)),
+        tile("أدنى درجة", pct(st.min)),
+        tile("متوسط درجاتك", pct(st.avg))),
+
+      h("div", { class: "two" },
+        h("section", { class: "panel" },
+          h("div", { class: "student-head" },
+            h("div", { class: "avatar", "aria-hidden": "true" }, (s.full_name || "؟").trim().charAt(0)),
+            h("div", null, h("h2", { style: "margin:0" }, s.full_name), h("div", { class: "muted small" }, "رقم الهوية: " + AR(s.national_id)))),
+          h("dl", { class: "details" },
+            details.map(d => h("div", null, h("dt", null, d.k), h("dd", null, String(d.v)))),
+            h("div", null, h("dt", null, "رقم الجوال"), h("dd", null, s.phone ? AR(s.phone) : "—", " ",
+              h("button", { class: "linkbtn", onclick: () => go("phone") }, s.phone ? "تعديل" : "إضافة"))))),
+        (S.data.files || []).length > 0 && h("section", { class: "panel" },
+          h("h2", null, "ملفاتي"),
+          h("ul", { class: "files" }, S.data.files.map(fl => h("li", null,
+            h("a", { class: "file", href: fl.url, target: "_blank", rel: "noopener" }, h("span", { class: "pdf", "aria-hidden": "true" }, "PDF"), fl.title)))))),
+
       h("section", { class: "panel" },
-        h("div", { class: "student-head" },
-          h("div", { class: "avatar", "aria-hidden": "true" }, initial),
-          h("div", null, h("h2", { style: "margin:0" }, s.full_name), h("div", { class: "muted small" }, "رقم الهوية: " + s.national_id)),
-          h("div", { style: "flex:1" }),
-          current && h("button", { class: "btn gold", onclick: () => go("lecture", { lid: current.id, part: 0 }) },
-            doneCount ? "تابع: " + current.title : "ابدأ المحاضرة الأولى")),
-        details.length > 0 && h("dl", { class: "details" }, details.map(d => h("div", null, h("dt", null, d.k), h("dd", null, String(d.v))))),
-        h("div", { class: "progress" },
-          h("div", { class: "bar", role: "progressbar", "aria-valuemin": "0", "aria-valuemax": String(ls.length), "aria-valuenow": String(doneCount) },
-            h("i", { style: `width:${ls.length ? (doneCount * 100 / ls.length) : 0}%` })),
-          h("span", { class: "small" }, `${doneCount} من ${ls.length} محاضرة`))),
-      (S.data.files || []).length > 0 && h("section", { class: "panel" },
-        h("h2", null, "ملفاتي"),
-        h("ul", { class: "files" }, S.data.files.map(f => h("li", null,
-          h("a", { class: "file", href: f.url, target: "_blank", rel: "noopener" }, h("span", { class: "pdf", "aria-hidden": "true" }, "PDF"), f.title))))),
-      h("section", { class: "panel" },
-        h("h2", null, "مسار المحاضرات"),
-        h("ol", { class: "path" }, ls.map(l => h("li", null,
-          h("button", { class: "stop " + l.state, disabled: l.state === "locked", onclick: () => go("lecture", { lid: l.id, part: 0 }),
-            "aria-label": `${l.title} — ${l.state === "done" ? "مكتملة" : l.state === "open" ? "متاحة" : "مقفلة"}` },
-            h("span", { class: "node" }, l.id),
-            h("span", null,
-              h("div", { class: "t" }, l.title + (l.parts.length > 1 ? ` (${l.parts.length} أجزاء)` : "")),
-              h("div", { class: "s" }, [l.topic, l.best != null ? `أفضل نتيجة ${l.best}%` : ""].filter(Boolean).join("، "))),
-            h("span", { class: "tag " + l.state }, l.state === "done" ? "مكتملة" : l.state === "open" ? "متاحة" : "مقفلة")))))))];
+        h("div", { class: "row", style: "justify-content:space-between;margin-bottom:6px" },
+          h("h2", { style: "margin:0" }, "المحاضرات"),
+          h("div", { class: "seg", role: "group", "aria-label": "تصفية المحاضرات" },
+            [["all", "الكل"], ["open", "المتاحة"], ["done", "المكتملة"]].map(([k, t]) =>
+              h("button", { "aria-pressed": String(f === k), onclick: () => { S.filter = k; render(); } }, t)))),
+        h("p", { class: "small muted" }, ACCESS[settings().access_mode] || ""),
+        groups.length ? groups.map((g, i) => g && h("div", { class: "unit" },
+          h("h3", null, `المحاضرات ${AR(g[0].id)} – ${AR(g[g.length - 1].id)}`),
+          h("ul", { class: "lgrid" }, g.map(card))))
+          : h("p", { class: "muted" }, f === "done" ? "لم تكمل أي محاضرة بعد." : "لا توجد محاضرات في هذا التصنيف.")))];
+  }
+
+  // ---------- رقم الجوال ----------
+  function viewPhone() {
+    const input = h("input", { type: "tel", class: "id-input", inputmode: "numeric", maxlength: "10", placeholder: "05xxxxxxxx", "aria-label": "رقم الجوال", value: S.data.student.phone || "" });
+    if (S.data.student.phone) input.value = S.data.student.phone;
+    const btn = h("button", { class: "btn", type: "submit", style: "width:100%" }, "حفظ ومتابعة");
+    setTimeout(() => input.focus(), 0);
+    return [band(), h("main", { class: "wrap narrow" }, h("div", { class: "panel login-card", style: "margin-top:40px" },
+      h("h1", { style: "font-size:1.5rem" }, S.data.student.phone ? "تعديل رقم الجوال" : "خطوة أخيرة قبل البدء"),
+      h("p", { class: "muted" }, "اكتب رقم جوالك ليتواصل معك معلمك عند الحاجة. لا يظهر رقمك لغيرك."),
+      h("form", { onsubmit: async e => {
+        e.preventDefault();
+        const v = toLatinDigits(input.value);
+        if (!/^05\d{8}$/.test(v)) { S.error = "اكتب رقم الجوال من ١٠ أرقام يبدأ بـ 05."; return render(); }
+        btn.disabled = true;
+        try { await API.setPhone(S.nid, v); await refresh(); go("home"); } catch (err) { S.error = err.message; render(); }
+      } },
+        S.error && h("div", { class: "alert err", role: "alert" }, S.error),
+        h("label", { class: "field" }, h("span", null, "رقم الجوال"), input), btn),
+      S.data.student.phone && h("button", { class: "btn ghost", style: "width:100%;margin-top:10px", onclick: () => go("home") }, "رجوع")))];
+  }
+
+  // ---------- الجلسة وحساب الوقت ----------
+  let pingTimer = null;
+  function startPing() {
+    clearInterval(pingTimer);
+    const sid = ss.get("andalus-sid"); if (!sid || !S.nid) return;
+    pingTimer = setInterval(() => { if (document.visibilityState === "visible" && S.nid) API.ping(sid, S.nid).catch(() => {}); }, 60000);
   }
 
   // ---------- المحاضرة ----------
@@ -418,20 +498,22 @@
   function fmt(ms) { const s = Math.floor(ms / 1000); return `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`; }
 
   function render() {
-    const views = { login: viewLogin, home: viewHome, lecture: viewLecture, quiz: viewQuiz, result: viewResult, sim: viewSim, simReview: viewSimReview, simResult: viewSimResult };
+    const views = { login: viewLogin, home: viewHome, phone: viewPhone, lecture: viewLecture, quiz: viewQuiz, result: viewResult, sim: viewSim, simReview: viewSimReview, simResult: viewSimResult };
     const nodes = (S.data || S.view === "login" ? views[S.view] : viewLogin)();
     app.replaceChildren(...[nodes].flat());
   }
   window.addEventListener("beforeunload", e => { if (S.view === "quiz" || S.view === "sim" || S.view === "simReview") { e.preventDefault(); e.returnValue = ""; } });
 
   (async () => {
+    try { S.pub = await API.publicSettings(); } catch {}
     const saved = ss.get("andalus-nid");
     if (saved) {
       app.replaceChildren(h("div", { class: "loading" }, "جارٍ التحميل…"));
       try {
         const d = await API.portal(saved);
         if (d) {
-          Object.assign(S, { nid: saved, data: d });
+          Object.assign(S, { nid: saved, data: d }); startPing();
+          if (!d.student.phone) return go("phone");
           let sim = null; try { sim = JSON.parse(ss.get(SIMKEY) || "null"); } catch {}
           if (sim && window.EXAMS[sim.lid]) { S.sim = sim; return go(Date.now() < sim.deadline ? "sim" : "simReview"); }
           return go("home");
