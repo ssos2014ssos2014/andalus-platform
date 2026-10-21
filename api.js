@@ -14,6 +14,7 @@ window.API = (() => {
     lecture_locked: "هذه المحاضرة مقفلة حتى تجتاز اختبار المحاضرة السابقة.",
     no_questions: "لا توجد أسئلة لهذه المحاضرة بعد.",
     already_submitted: "تم تسليم هذا الاختبار مسبقًا.",
+    bad_items: "تعذر حفظ الاختبار. أعد المحاولة.",
     attempt_not_found: "تعذر العثور على الاختبار. ابدأ اختبارًا جديدًا."
   };
   const friendly = msg => {
@@ -30,7 +31,9 @@ window.API = (() => {
     portal: nid => rpc("student_portal", { p_nid: nid }),
     markWatched: (nid, lid) => rpc("mark_watched", { p_nid: nid, p_lid: lid }),
     startQuiz: (nid, lid) => rpc("start_quiz", { p_nid: nid, p_lid: lid }),
-    submitQuiz: (nid, attempt, answers) => rpc("submit_quiz", { p_attempt: attempt, p_nid: nid, p_answers: answers })
+    submitQuiz: (nid, attempt, answers) => rpc("submit_quiz", { p_attempt: attempt, p_nid: nid, p_answers: answers }),
+    startPractice: (nid, lid) => rpc("start_practice", { p_nid: nid, p_lid: lid }),
+    submitPractice: (nid, attempt, items, sec) => rpc("submit_practice", { p_attempt: attempt, p_nid: nid, p_items: items, p_duration: sec })
   };
 
   // ---------------- وضع التجربة ----------------
@@ -61,6 +64,7 @@ window.API = (() => {
   const qCount = lid => QS.filter(q => q.lecture_id === lid).length;
   function done(st, nid, lid) {
     if (st.attempts.some(a => a.nid === nid && a.lid === lid && a.passed)) return true;
+    if (window.EXAMS && window.EXAMS[lid]) return false;
     return qCount(lid) === 0 && st.views.some(v => v.nid === nid && v.lid === lid);
   }
   function unlocked(st, nid, lid) {
@@ -69,13 +73,31 @@ window.API = (() => {
   }
   const wait = () => new Promise(r => setTimeout(r, 150));
   const demoApi = {
+    async startPractice(nid, lid) {
+      await wait(); const st = load();
+      if (!unlocked(st, nid, lid)) throw new Error(ERRORS.lecture_locked);
+      const id = "demo-" + Date.now();
+      st.attempts.push({ id, nid, lid, mode: "generated", qids: [], t: Date.now(), submitted: false }); save(st);
+      const used = st.attempts.filter(a => a.nid === nid && a.lid === lid && a.items).flatMap(a => a.items.map(i => i.sig));
+      return { attempt_id: id, seed: Math.floor(Math.random() * 2147483647), pass_mark: SETTINGS.pass_mark, used };
+    },
+    async submitPractice(nid, attempt, items) {
+      await wait(); const st = load();
+      const a = st.attempts.find(x => x.id === attempt && x.nid === nid);
+      if (!a) throw new Error(ERRORS.attempt_not_found);
+      if (a.submitted) throw new Error(ERRORS.already_submitted);
+      const score = items.filter(i => i.chosen != null && i.chosen === i.correct).length;
+      const percent = Math.round(score * 100 / items.length);
+      Object.assign(a, { submitted: true, percent, passed: percent >= SETTINGS.pass_mark, items: items.map(i => ({ sig: i.sig })) }); save(st);
+      return { score, total: items.length, percent, passed: a.passed, pass_mark: SETTINGS.pass_mark };
+    },
     async portal(nid) {
       await wait();
       const s = DEMO_STUDENTS.find(x => x.national_id === nid); if (!s) return null;
       const st = load();
       return { student: s, files: [], settings: SETTINGS, lectures: window.LECTURES.map(l => {
         const mine = st.attempts.filter(a => a.nid === nid && a.lid === l.id && a.submitted);
-        return { ...l, question_count: qCount(l.id), watched: st.views.some(v => v.nid === nid && v.lid === l.id),
+        return { ...l, exam_mode: window.EXAMS && window.EXAMS[l.id] ? "generated" : "bank", question_count: qCount(l.id), watched: st.views.some(v => v.nid === nid && v.lid === l.id),
           done: done(st, nid, l.id), best: mine.length ? Math.max(...mine.map(a => a.percent)) : null, attempts_count: mine.length };
       }) };
     },

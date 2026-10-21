@@ -212,3 +212,23 @@ tr:last-child td { border-bottom: 0; }
 .file { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border: 1px solid var(--line); border-radius: 10px; text-decoration: none; color: var(--ink); font-weight: 600; background: var(--surface); }
 .file:hover { border-color: var(--tile); background: var(--tile-soft); }
 .file .pdf { flex: none; font-size: .72rem; font-weight: 700; letter-spacing: .04em; color: #fff; background: var(--warn); border-radius: 6px; padding: 4px 7px; direction: ltr; }
+
+/* ---------- الاختبار المحاكي (نمط قياس) ---------- */
+.sim-top { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px 16px; margin-bottom: 14px; position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; }
+.sim-top .spacer { flex: 1; }
+.sim-top .clock { font-size: 1.25rem; padding: 4px 14px; }
+.clock.low { background: var(--warn-soft); color: var(--warn); }
+.sim-q { min-height: 340px; }
+.qnum { display: inline-grid; place-items: center; min-width: 38px; height: 38px; border-radius: 10px; background: var(--ink); color: var(--paper); font-weight: 700; }
+.flag.on { background: var(--saffron-soft); border-color: var(--saffron); color: var(--ink); }
+.sim-nav { display: flex; justify-content: space-between; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
+.legend { display: flex; gap: 14px; margin: 6px 0 12px; }
+.legend .c::before { content: ""; display: inline-block; width: 14px; height: 14px; border-radius: 4px; border: 1px solid var(--line); background: var(--surface); margin-inline-end: 6px; vertical-align: -2px; }
+.legend .c.answered::before { background: var(--tile-soft); border-color: var(--tile); }
+.legend .c.flagged::before { background: var(--saffron-soft); border-color: var(--saffron); }
+.rgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(48px, 1fr)); gap: 8px; }
+.rgrid button { height: 46px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); font-weight: 700; cursor: pointer; position: relative; }
+.rgrid button.answered { background: var(--tile-soft); border-color: var(--tile); color: var(--tile-deep); }
+.rgrid button.flagged { box-shadow: inset 0 0 0 2px var(--saffron); }
+.rgrid button.flagged::after { content: "★"; position: absolute; top: -4px; inset-inline-start: 4px; font-size: .75rem; color: var(--saffron); }
+.review .tip { color: var(--tile-deep); background: var(--tile-soft); border-radius: 8px; padding: 6px 10px; margin-top: 8px; }

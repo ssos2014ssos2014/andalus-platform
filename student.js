@@ -118,7 +118,8 @@
     if (!l || l.state === "locked") { S.view = "home"; return viewHome(); }
     const part = l.parts[S.part] || l.parts[0];
     const st = settings();
-    const hasQuiz = l.question_count > 0;
+    const sim = l.exam_mode === "generated" && window.EXAMS[l.id];
+    const hasQuiz = l.question_count > 0 || !!sim;
     const next = nextOf(l.id);
     const qn = Math.min(st.questions_per_quiz, l.question_count);
 
@@ -128,7 +129,10 @@
       catch (e) { S.error = e.message; render(); }
     } }, l.parts.length > 1 ? "أنهيت مشاهدة جميع الأجزاء" : "أنهيت مشاهدة المحاضرة");
 
-    const startBtn = h("button", { class: "btn gold", disabled: !l.watched, onclick: async () => {
+    const startBtn = sim ? h("button", { class: "btn gold", disabled: !l.watched, onclick: async () => {
+      startBtn.disabled = true; startBtn.textContent = "جارٍ تجهيز الاختبار…";
+      try { await startSim(l); } catch (e) { S.error = e.message; render(); }
+    } }, l.attempts_count ? "اختبار محاكي جديد بأسئلة مختلفة" : "ابدأ الاختبار المحاكي") : h("button", { class: "btn gold", disabled: !l.watched, onclick: async () => {
       startBtn.disabled = true; startBtn.textContent = "جارٍ تجهيز الأسئلة…";
       try {
         const q = await API.startQuiz(S.nid, l.id);
@@ -166,7 +170,7 @@
               "اختبار هذه المحاضرة قيد الإعداد." + (l.watched && next ? " يمكنك الانتقال للمحاضرة التالية." : ""))
             : [h("p", { class: "small" },
                 l.done ? `اجتزت هذه المحاضرة بأفضل نتيجة ${l.best}%. يمكنك إعادة الاختبار للتدريب.`
-                  : l.watched ? `${qn} أسئلة، ونسبة الاجتياز ${st.pass_mark}%.` + (l.attempts_count ? ` محاولاتك السابقة: ${l.attempts_count}، أفضلها ${l.best}%.` : "")
+                  : l.watched ? (sim ? `اختبار محاكي محوسب بنمط قياس: ${sim.blueprint.reduce((t, b) => t + b[1], 0)} سؤالًا في ${sim.minutes} دقيقة، ونسبة الاجتياز ${st.pass_mark}%. تتجدد الأسئلة في كل محاولة.` : `${qn} أسئلة، ونسبة الاجتياز ${st.pass_mark}%.`) + (l.attempts_count ? ` محاولاتك السابقة: ${l.attempts_count}، أفضلها ${l.best}%.` : "")
                   : "يُفتح بعد إنهاء المشاهدة."),
               startBtn])),
       l.done && next && h("div", { class: "row", style: "margin-top:18px" },
@@ -257,22 +261,182 @@
         }))))];
   }
 
+  // ---------- الاختبار المحاكي (نمط قياس) ----------
+  const SIMKEY = "andalus-sim";
+  const ARD = s => String(s).replace(/[0-9]/g, c => "٠١٢٣٤٥٦٧٨٩"[c]);
+  const tfmt = sec => ARD(ExamEngine.fmtTime(Math.max(0, Math.round(sec))));
+  const saveSim = () => ss.set(SIMKEY, S.sim ? JSON.stringify(S.sim) : null);
+  async function startSim(l) {
+    const def = window.EXAMS[l.id];
+    const r = await API.startPractice(S.nid, l.id);
+    const items = ExamEngine.build(def, Number(r.seed) || Date.now(), r.used || []);
+    S.sim = { lid: l.id, attempt: r.attempt_id, pass_mark: r.pass_mark, items, answers: {}, flags: {}, i: 0,
+      deadline: Date.now() + def.minutes * 60000, started: Date.now(), filter: null };
+    saveSim(); go("sim");
+  }
+  function simNav() {
+    const Q = S.sim;
+    if (Q.filter === "unanswered") return Q.items.map((_, i) => i).filter(i => Q.answers[i] == null);
+    if (Q.filter === "flagged") return Q.items.map((_, i) => i).filter(i => Q.flags[i]);
+    return Q.items.map((_, i) => i);
+  }
+  let simTimer = null;
+  function tick(el) {
+    clearInterval(simTimer);
+    const run = () => {
+      if (!S.sim || !["sim", "simReview"].includes(S.view)) return clearInterval(simTimer);
+      const left = (S.sim.deadline - Date.now()) / 1000;
+      el.textContent = tfmt(left);
+      el.classList.toggle("low", left <= 300);
+      if (left <= 0) { clearInterval(simTimer); finishSim(true); }
+    };
+    run(); simTimer = setInterval(run, 1000);
+  }
+  function simHead(title) {
+    const Q = S.sim, def = window.EXAMS[Q.lid];
+    const clock = h("span", { class: "clock", role: "timer", "aria-label": "الوقت المتبقي" });
+    tick(clock);
+    return h("div", { class: "sim-top" },
+      h("div", null, h("strong", null, def.title), h("div", { class: "small muted" }, title)),
+      h("div", { class: "spacer" }),
+      h("div", { class: "small muted" }, "الوقت المتبقي"), clock);
+  }
+  function viewSim() {
+    const Q = S.sim, q = Q.items[Q.i], total = Q.items.length, nav = simNav();
+    const pos = nav.indexOf(Q.i);
+    const opts = q.options.map((o, k) => h("label", { class: "opt" },
+      h("input", { type: "radio", name: "sq", checked: Q.answers[Q.i] === k, onchange: () => { Q.answers[Q.i] = k; saveSim(); render(); } }),
+      h("span", { class: "l" }, LETTERS[k]), h("span", null, o)));
+    const answered = Object.keys(Q.answers).length;
+    return [band(), h("main", { class: "wrap narrow" },
+      simHead(`السؤال ${ARD(Q.i + 1)} من ${ARD(total)}، أجبت عن ${ARD(answered)}`),
+      Q.filter && h("div", { class: "alert info small" }, Q.filter === "flagged" ? "أنت تتنقل بين الأسئلة المميزة فقط." : "أنت تتنقل بين الأسئلة غير المجاب عنها فقط.",
+        " ", h("button", { class: "btn ghost sm", onclick: () => { Q.filter = null; saveSim(); render(); } }, "عرض كل الأسئلة")),
+      h("section", { class: "panel sim-q" },
+        h("div", { class: "row", style: "justify-content:space-between;margin-bottom:10px" },
+          h("span", { class: "qnum" }, ARD(Q.i + 1)),
+          h("button", { class: "btn ghost sm flag" + (Q.flags[Q.i] ? " on" : ""), "aria-pressed": String(!!Q.flags[Q.i]),
+            onclick: () => { Q.flags[Q.i] = !Q.flags[Q.i]; saveSim(); render(); } }, Q.flags[Q.i] ? "★ مميز للمراجعة" : "☆ تمييز للمراجعة")),
+        h("div", { class: "qbody" }, q.body),
+        h("div", { class: "opts", role: "radiogroup" }, opts)),
+      h("div", { class: "sim-nav" },
+        h("button", { class: "btn ghost", disabled: pos <= 0, onclick: () => { Q.i = nav[pos - 1]; saveSim(); render(); } }, "السابق"),
+        h("button", { class: "btn ghost", onclick: () => go("simReview") }, "صفحة المراجعة"),
+        pos < nav.length - 1
+          ? h("button", { class: "btn", onclick: () => { Q.i = nav[pos + 1]; saveSim(); render(); } }, "التالي")
+          : h("button", { class: "btn gold", onclick: () => go("simReview") }, "إنهاء ومراجعة")))];
+  }
+  function viewSimReview() {
+    const Q = S.sim, total = Q.items.length;
+    const un = Q.items.filter((_, i) => Q.answers[i] == null).length, fl = Object.values(Q.flags).filter(Boolean).length;
+    const jump = (i, filter) => { Q.i = i; Q.filter = filter || null; saveSim(); go("sim"); };
+    return [band(), h("main", { class: "wrap narrow" },
+      simHead("صفحة المراجعة"),
+      h("section", { class: "panel" },
+        h("h2", null, "مراجعة إجاباتك قبل التسليم"),
+        h("p", { class: "small muted" }, `أجبت عن ${ARD(total - un)} من ${ARD(total)}، وغير المجاب ${ARD(un)}، والمميز للمراجعة ${ARD(fl)}. اضغط رقم أي سؤال للانتقال إليه.`),
+        h("div", { class: "legend small" }, h("span", { class: "c answered" }, "مجاب"), h("span", { class: "c" }, "غير مجاب"), h("span", { class: "c flagged" }, "مميز")),
+        h("div", { class: "rgrid" }, Q.items.map((_, i) => h("button", {
+          class: [Q.answers[i] != null && "answered", Q.flags[i] && "flagged"].filter(Boolean).join(" "),
+          "aria-label": `السؤال ${i + 1}${Q.answers[i] != null ? "، مجاب" : "، غير مجاب"}${Q.flags[i] ? "، مميز" : ""}`, onclick: () => jump(i) }, ARD(i + 1)))),
+        h("div", { class: "row", style: "margin-top:18px" },
+          h("button", { class: "btn ghost", onclick: () => jump(0) }, "مراجعة الكل"),
+          h("button", { class: "btn ghost", disabled: !un, onclick: () => jump(Q.items.findIndex((_, i) => Q.answers[i] == null), "unanswered") }, "مراجعة غير المجاب"),
+          h("button", { class: "btn ghost", disabled: !fl, onclick: () => jump(Q.items.findIndex((_, i) => Q.flags[i]), "flagged") }, "مراجعة المميز"))),
+      h("div", { class: "row", style: "justify-content:flex-end;margin-top:16px" },
+        h("button", { class: "btn gold", onclick: () => finishSim(false) }, "إنهاء الاختبار وعرض النتيجة")))];
+  }
+  let finishing = false;
+  async function finishSim(timeUp) {
+    const Q = S.sim; if (!Q || finishing) return;
+    const un = Q.items.filter((_, i) => Q.answers[i] == null).length;
+    if (!timeUp && un && !confirm(`لم تجب عن ${un} سؤالًا وستُحتسب خاطئة. هل تريد إنهاء الاختبار؟`)) return;
+    finishing = true;
+    const sec = Math.min((Date.now() - Q.started) / 1000, window.EXAMS[Q.lid].minutes * 60);
+    const items = Q.items.map((q, i) => ({ n: i + 1, sig: q.sig, skill: q.skill, body: q.body, options: q.options, correct: q.correct, chosen: Q.answers[i] ?? null, explanation: q.explanation }));
+    try {
+      const r = await API.submitPractice(S.nid, Q.attempt, items, Math.round(sec));
+      clearInterval(simTimer);
+      S.sim = null; saveSim();
+      await refresh();
+      go("simResult", { result: { ...r, items, lid: Q.lid, sec, timeUp } });
+    } catch (e) { S.error = e.message; alert(e.message); }
+    finishing = false;
+  }
+  function ranges(sk) {
+    return [[sk.from, sk.to], ...(sk.extra || [])].map(([a, b]) => `${tfmt(a)} – ${tfmt(b)}`).join(" ، ");
+  }
+  function viewSimResult() {
+    const R = S.result, def = window.EXAMS[R.lid], l = lecture(R.lid), next = nextOf(R.lid);
+    const near = !R.passed && R.percent >= R.pass_mark - 20;
+    const per = {};
+    R.items.forEach(it => { const p = per[it.skill] ||= { ok: 0, n: 0 }; p.n++; if (it.chosen === it.correct) p.ok++; });
+    const weak = Object.entries(per).filter(([, p]) => p.ok < p.n);
+    const verdict = R.passed
+      ? { t: "أحسنت، اجتزت الاختبار المحاكي", m: next ? `مستواك في المحاضرة جيد، ننصحك بالانتقال إلى ${next.title}.` + (weak.length ? " وراجع سريعًا الأجزاء المحددة أدناه." : "") : "أنهيت آخر محاضرة في الدورة. أحسنت!" }
+      : near ? { t: "اقتربت من الاجتياز", m: "راجع أجزاء المقطع المحددة أمام كل مهارة أخطأت فيها، ثم أعد الاختبار، وستظهر لك أسئلة جديدة بالكامل." }
+      : { t: "ننصحك بمراجعة المحاضرة", m: "شاهد المحاضرة مرة أخرى مع التركيز على الأجزاء المحددة أدناه، ثم أعد الاختبار بأسئلة جديدة." };
+    const wrong = R.items.filter(it => it.chosen !== it.correct);
+    return [band(), h("main", { class: "wrap narrow" },
+      h("section", { class: "panel" },
+        h("div", { class: "score" },
+          h("div", { class: "ring", style: `--p:${R.percent};--c:var(${R.passed ? "--ok" : "--warn"})` }, h("span", null, ARD(R.percent) + "٪")),
+          h("div", { style: "flex:1;min-width:220px" },
+            h("h1", { class: "verdict " + (R.passed ? "pass" : "fail"), style: "font-size:1.55rem" }, verdict.t),
+            h("p", null, verdict.m),
+            h("p", { class: "small muted", style: "margin:0" }, `الدرجة ${ARD(R.score)} من ${ARD(R.total)}، نسبة الاجتياز ${ARD(R.pass_mark)}٪، الوقت المستغرق ${tfmt(R.sec)} من ${ARD(def.minutes)}:٠٠` + (R.timeUp ? " (انتهى الوقت)" : "")))),
+        h("div", { class: "row", style: "margin-top:18px" },
+          R.passed && next && h("button", { class: "btn gold", onclick: () => go("lecture", { lid: next.id, part: 0, result: null }) }, "انتقل إلى " + next.title),
+          h("button", { class: R.passed ? "btn ghost" : "btn gold", onclick: () => go("lecture", { lid: l.id, part: 0, result: null }) }, "راجع المحاضرة"),
+          h("button", { class: "btn ghost", onclick: async e => { e.target.disabled = true; try { await startSim(l); } catch (err) { alert(err.message); e.target.disabled = false; } } }, "اختبار جديد بأسئلة مختلفة"))),
+      h("section", { class: "panel" },
+        h("h2", null, "نتيجتك في كل مهارة"),
+        h("div", { class: "table-wrap" }, h("table", null,
+          h("thead", null, h("tr", null, h("th", null, "المهارة"), h("th", null, "الدرجة"), h("th", null, "راجعها في المقطع (دقيقة)"))),
+          h("tbody", null, Object.keys(def.skills).filter(k => per[k]).map(k => {
+            const p = per[k], sk = def.skills[k];
+            return h("tr", null, h("td", null, sk.title),
+              h("td", { class: p.ok === p.n ? "chip-pass" : "chip-fail" }, `${ARD(p.ok)} من ${ARD(p.n)}`),
+              h("td", { class: "small" }, p.ok === p.n ? "متقنة ✓" : ranges(sk)));
+          }))))),
+      wrong.length > 0 && h("section", { class: "panel" },
+        h("h2", null, `شرح الأسئلة التي لم تُجب عنها صحيحًا (${ARD(wrong.length)})`),
+        h("ol", { class: "review" }, wrong.map(it => {
+          const sk = def.skills[it.skill];
+          return h("li", { class: "wrong" },
+            h("div", { class: "small muted" }, `السؤال ${ARD(it.n)} · ${sk.title}`),
+            h("div", { style: "font-weight:600;white-space:pre-wrap" }, it.body),
+            h("p", { class: "a" }, "إجابتك: ", it.chosen == null ? "لم تُجب" : it.options[it.chosen], " ✗"),
+            h("p", { class: "a" }, "الإجابة الصحيحة: ", h("strong", null, it.options[it.correct])),
+            h("p", { class: "a muted" }, it.explanation),
+            h("p", { class: "a tip" }, "📍 راجع هذا الجزء في المقطع من الدقيقة ", h("strong", null, ranges(sk))));
+        }))))];
+  }
+
   // ---------- عام ----------
   function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
   function fmt(ms) { const s = Math.floor(ms / 1000); return `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`; }
 
   function render() {
-    const views = { login: viewLogin, home: viewHome, lecture: viewLecture, quiz: viewQuiz, result: viewResult };
+    const views = { login: viewLogin, home: viewHome, lecture: viewLecture, quiz: viewQuiz, result: viewResult, sim: viewSim, simReview: viewSimReview, simResult: viewSimResult };
     const nodes = (S.data || S.view === "login" ? views[S.view] : viewLogin)();
     app.replaceChildren(...[nodes].flat());
   }
-  window.addEventListener("beforeunload", e => { if (S.view === "quiz") { e.preventDefault(); e.returnValue = ""; } });
+  window.addEventListener("beforeunload", e => { if (S.view === "quiz" || S.view === "sim" || S.view === "simReview") { e.preventDefault(); e.returnValue = ""; } });
 
   (async () => {
     const saved = ss.get("andalus-nid");
     if (saved) {
       app.replaceChildren(h("div", { class: "loading" }, "جارٍ التحميل…"));
-      try { const d = await API.portal(saved); if (d) { Object.assign(S, { nid: saved, data: d }); return go("home"); } } catch {}
+      try {
+        const d = await API.portal(saved);
+        if (d) {
+          Object.assign(S, { nid: saved, data: d });
+          let sim = null; try { sim = JSON.parse(ss.get(SIMKEY) || "null"); } catch {}
+          if (sim && window.EXAMS[sim.lid]) { S.sim = sim; return go(Date.now() < sim.deadline ? "sim" : "simReview"); }
+          return go("home");
+        }
+      } catch {}
     }
     render();
   })();
