@@ -2,7 +2,18 @@
   const app = document.getElementById("app");
   const sb = API.sb;
   const LETTERS = ["أ", "ب", "ج", "د", "هـ", "و"];
-  const A = { tab: "students", msg: null, lectures: [], qLecture: 1, editQ: null, importPreview: null, qPreview: null };
+  const A = { tab: "students", msg: null, lectures: [], qLecture: 1, editQ: null, importPreview: null, qPreview: null, pdfStudents: null };
+  const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now() + "-" + Math.random().toString(16).slice(2));
+  const isPdf = f => /\.pdf$/i.test(f.name) || f.type === "application/pdf";
+  async function uploadPdf(bucket, folder, file) {
+    if (!isPdf(file)) throw new Error(`الملف «${file.name}» ليس PDF.`);
+    if (file.size > 50 * 1024 * 1024) throw new Error(`الملف «${file.name}» أكبر من 50 ميجابايت.`);
+    const path = `${folder}/${uid()}.pdf`;
+    const { error } = await sb.storage.from(bucket).upload(path, file, { contentType: "application/pdf", upsert: false });
+    if (error) throw new Error(error.message.includes("Bucket not found") ? "مخازن الملفات غير موجودة. شغّل ملف update-pdf.sql في Supabase أولًا." : error.message);
+    return { path, url: sb.storage.from(bucket).getPublicUrl(path).data.publicUrl };
+  }
+  const baseName = n => n.replace(/\.pdf$/i, "").replace(/[_]+/g, " ").trim();
 
   function h(tag, attrs, ...kids) {
     const el = document.createElement(tag);
@@ -87,15 +98,23 @@
     const search = h("input", { type: "text", placeholder: "ابحث بالاسم أو رقم الهوية" });
     const list = h("div");
     async function load() {
-      let q = sb.from("students").select("national_id, full_name, details").order("full_name").limit(100);
+      let q = sb.from("students").select("national_id, full_name, details, student_files(id, title, url, path)").order("full_name").limit(100);
       const t = search.value.trim();
       if (t) q = q.or(`full_name.ilike.%${t.replace(/[%,()]/g, "")}%,national_id.ilike.%${toLatinDigits(t).replace(/[%,()]/g, "")}%`);
       const { data, error } = await q; if (error) throw error;
       list.replaceChildren(data.length ? h("div", { class: "table-wrap" }, h("table", null,
-        h("thead", null, h("tr", null, h("th", null, "الاسم"), h("th", null, "رقم الهوية"), h("th", null, "البيانات"), h("th", null, ""))),
+        h("thead", null, h("tr", null, h("th", null, "الاسم"), h("th", null, "رقم الهوية"), h("th", null, "البيانات"), h("th", null, "الملفات"), h("th", null, ""))),
         h("tbody", null, data.map(s => h("tr", null,
           h("td", null, s.full_name), h("td", null, s.national_id),
           h("td", { class: "small" }, (s.details || []).map(d => `${d.k}: ${d.v}`).join("، ")),
+          h("td", { class: "small" }, (s.student_files || []).map(f => h("div", null,
+            h("a", { href: f.url, target: "_blank", rel: "noopener" }, f.title), " ",
+            h("button", { class: "btn ghost sm", style: "min-height:26px;padding:0 8px", "aria-label": "حذف الملف " + f.title, onclick: async () => {
+              if (!confirm(`حذف الملف «${f.title}»؟`)) return;
+              await sb.storage.from("student-files").remove([f.path]);
+              const { error } = await sb.from("student_files").delete().eq("id", f.id);
+              error ? flash("err", error.message) : flash("ok", "تم حذف الملف.");
+            } }, "×")))),
           h("td", null, h("button", { class: "btn danger sm", onclick: async () => {
             if (!confirm(`حذف الطالب ${s.full_name} ونتائجه؟`)) return;
             const { error } = await sb.from("students").delete().eq("national_id", s.national_id);
@@ -108,10 +127,15 @@
     return [
       h("section", { class: "panel" },
         h("h2", null, "استيراد الطلاب من Excel"),
-        h("p", { class: "small muted" }, "ارفع ملف Excel أو CSV فيه صف للعناوين. سيُطلب منك تحديد عمود رقم الهوية وعمود الاسم، وكل الأعمدة الأخرى تظهر للطالب في بطاقته كما هي. الطالب المسجل مسبقًا تُحدَّث بياناته ولا تُحذف نتائجه."),
-        h("input", { type: "file", accept: ".xlsx,.xls,.csv", onchange: async e => {
+        h("p", { class: "small muted" }, "ارفع ملف Excel أو CSV أو PDF (مثل كشوف نور). في Excel:  سيُطلب منك تحديد عمود رقم الهوية وعمود الاسم، وكل الأعمدة الأخرى تظهر للطالب في بطاقته كما هي. في PDF: يُقرأ رقم الهوية والاسم فقط. الطالب المسجل مسبقًا تُحدَّث بياناته ولا تُحذف نتائجه."),
+        h("input", { type: "file", accept: ".xlsx,.xls,.csv,.pdf", onchange: async e => {
           const f = e.target.files[0]; if (!f) return;
           try {
+            if (isPdf(f)) {
+              const list = PDFTools.students(await PDFTools.lines(f));
+              if (!list.length) return flash("err", "لم أجد في الملف أرقام هوية من 10 خانات بجانبها أسماء. إن كان الكشف صورة ممسوحة فصدّره من نور بصيغة Excel.");
+              A.importPreview = null; A.pdfStudents = { list, revW: false, revC: false }; return render();
+            }
             const rows = await readSheet(f);
             if (rows.length < 2) return flash("err", "الملف لا يحتوي على بيانات بعد صف العناوين.");
             const headers = rows[0].map(cell);
@@ -120,7 +144,9 @@
             render();
           } catch (err) { flash("err", "تعذرت قراءة الملف: " + err.message); }
         } }),
-        A.importPreview && importPreview()),
+        A.importPreview && importPreview(),
+        A.pdfStudents && pdfStudentsPreview()),
+      studentFilesPanel(),
       h("section", { class: "panel" },
         h("div", { class: "row", style: "justify-content:space-between" }, h("h2", { style: "margin:0" }, `الطلاب المسجلون (${count ?? 0})`)),
         h("div", { style: "margin:12px 0" }, search), list)];
@@ -158,6 +184,65 @@
         h("button", { class: "btn ghost", onclick: () => { A.importPreview = null; render(); } }, "إلغاء")));
   }
 
+  function pdfStudentsPreview() {
+    const P = A.pdfStudents;
+    const recs = P.list.map(r => ({ national_id: r.national_id, full_name: PDFTools.fixName(r.full_name, P.revW, P.revC) }));
+    const box = (key, label) => h("label", { class: "row small", style: "gap:6px" },
+      h("input", { type: "checkbox", checked: P[key], onchange: e => { P[key] = e.target.checked; render(); } }), label);
+    return h("div", { style: "margin-top:16px" },
+      h("p", null, `وجدت في الملف ${recs.length} طالبًا. راجع الأسماء: إن ظهرت مقلوبة فاستخدم خياري التصحيح.`),
+      h("div", { class: "row", style: "margin-bottom:10px" }, box("revW", "عكس ترتيب كلمات الاسم"), box("revC", "عكس حروف كل كلمة")),
+      h("div", { class: "table-wrap", style: "margin-bottom:12px;max-height:340px;overflow:auto" }, h("table", null,
+        h("thead", null, h("tr", null, h("th", null, "الاسم"), h("th", null, "رقم الهوية"))),
+        h("tbody", null, recs.map(r => h("tr", null, h("td", null, r.full_name), h("td", null, r.national_id)))))),
+      h("div", { class: "row" },
+        h("button", { class: "btn", onclick: async e => {
+          e.target.disabled = true; e.target.textContent = "جارٍ الاستيراد…";
+          for (let i = 0; i < recs.length; i += 500) {
+            const { error } = await sb.from("students").upsert(recs.slice(i, i + 500), { onConflict: "national_id" });
+            if (error) return flash("err", "توقف الاستيراد: " + error.message);
+          }
+          A.pdfStudents = null; flash("ok", `تم استيراد ${recs.length} طالبًا من ملف PDF.`);
+        } }, `استيراد ${recs.length} طالبًا`),
+        h("button", { class: "btn ghost", onclick: () => { A.pdfStudents = null; render(); } }, "إلغاء")));
+  }
+
+  function studentFilesPanel() {
+    const title = h("input", { type: "text", placeholder: "عنوان الملف (اختياري)، مثل: شهادة الفصل الأول" });
+    const nid = h("input", { type: "text", inputmode: "numeric", placeholder: "رقم هوية طالب واحد (اختياري)" });
+    const files = h("input", { type: "file", accept: ".pdf,application/pdf", multiple: true });
+    const status = h("p", { class: "small", "aria-live": "polite" });
+    return h("section", { class: "panel" },
+      h("h2", null, "ملفات خاصة بكل طالب (PDF)"),
+      h("p", { class: "small muted" }, "تظهر للطالب في بطاقته فقط. للرفع الجماعي سمِّ كل ملف برقم هوية صاحبه، مثل 1234567890.pdf أو 1234567890-شهادة.pdf، واختر الملفات كلها مرة واحدة. ولرفع ملف لطالب واحد اكتب رقم هويته في الخانة."),
+      h("div", { class: "grid2" }, title, nid),
+      h("div", { class: "row", style: "margin-top:12px" }, files,
+        h("button", { class: "btn", onclick: async e => {
+          const list = [...files.files]; if (!list.length) return flash("err", "اختر ملفًا واحدًا على الأقل.");
+          const one = toLatinDigits(nid.value);
+          e.target.disabled = true;
+          const { data: studs } = one ? await sb.from("students").select("national_id").eq("national_id", one)
+            : await sb.from("students").select("national_id").in("national_id", list.map(f => (toLatinDigits(f.name).match(/[12]\d{9}/) || [""])[0]).filter(Boolean));
+          const known = new Set((studs || []).map(s => s.national_id));
+          if (one && !known.has(one)) { e.target.disabled = false; return flash("err", "رقم الهوية غير مسجل في الطلاب."); }
+          let done = 0; const skipped = [];
+          for (const f of list) {
+            const id = one || (toLatinDigits(f.name).match(/[12]\d{9}/) || [""])[0];
+            if (!known.has(id)) { skipped.push(f.name); continue; }
+            status.textContent = `جارٍ رفع ${done + 1} من ${list.length}…`;
+            try {
+              const up = await uploadPdf("student-files", id, f);
+              const t = title.value.trim() || baseName(f.name).replace(/[12]\d{9}/, "").replace(/^[\s\-–_]+|[\s\-–_]+$/g, "") || "ملف";
+              const { error } = await sb.from("student_files").insert({ national_id: id, title: t, path: up.path, url: up.url });
+              if (error) throw error;
+              done++;
+            } catch (err) { skipped.push(`${f.name} (${err.message})`); }
+          }
+          flash(skipped.length ? "info" : "ok", `تم رفع ${done} ملفًا.` + (skipped.length ? ` لم يُرفع: ${skipped.join("، ")}. تأكد أن اسم الملف يحتوي رقم هوية طالب مسجل.` : ""));
+        } }, "رفع الملفات")),
+      status);
+  }
+
   // ---------- الأسئلة ----------
   async function tabQuestions() {
     const { data: counts } = await sb.from("questions").select("lecture_id").eq("active", true);
@@ -170,19 +255,33 @@
     return [
       h("section", { class: "panel" },
         h("h2", null, "استيراد الأسئلة من Excel"),
-        h("p", { class: "small muted" }, "الأعمدة بالترتيب: رقم المحاضرة، السؤال، الخيار أ، الخيار ب، الخيار ج، الخيار د، الإجابة الصحيحة (أ أو ب أو ج أو د)، الشرح. يكفي ملف واحد لكل المحاضرات. اجعل لكل محاضرة ضعف عدد أسئلة الاختبار على الأقل حتى تتغير الأسئلة بين المحاولات."),
+        h("p", { class: "small muted" }, "من PDF: اكتب كل سؤال برقمه، ثم الخيارات أ) ب) ج) د)، ثم «الإجابة: ب»، ثم «الشرح: ...» اختياريًا. وضع سطر «المحاضرة 3» قبل أسئلة كل محاضرة، وإلا أُضيفت للمحاضرة المختارة في الأسفل. ستظهر لك معاينة قبل الإضافة."),
+        h("p", { class: "small muted" }, "من Excel: الأعمدة بالترتيب: رقم المحاضرة، السؤال، الخيار أ، الخيار ب، الخيار ج، الخيار د، الإجابة الصحيحة (أ أو ب أو ج أو د)، الشرح. يكفي ملف واحد لكل المحاضرات. اجعل لكل محاضرة ضعف عدد أسئلة الاختبار على الأقل حتى تتغير الأسئلة بين المحاولات."),
         h("div", { class: "row" },
           h("button", { class: "btn ghost", onclick: () => {
             const ws = XLSX.utils.aoa_to_sheet([["رقم المحاضرة", "السؤال", "أ", "ب", "ج", "د", "الإجابة", "الشرح"],
               [1, "ما ناتج ٣ + ٤ × ٢ ؟", "14", "11", "10", "9", "ب", "الضرب قبل الجمع: ٤ × ٢ = ٨ ثم ٨ + ٣ = ١١"]]);
             const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "الأسئلة"); XLSX.writeFile(wb, "قالب-الأسئلة.xlsx");
           } }, "تنزيل قالب الأسئلة"),
-          h("input", { type: "file", accept: ".xlsx,.xls,.csv", onchange: async e => {
+          h("input", { type: "file", accept: ".xlsx,.xls,.csv,.pdf", onchange: async e => {
             const f = e.target.files[0]; if (!f) return;
-            try { A.qPreview = parseQuestions(await readSheet(f)); render(); } catch (err) { flash("err", "تعذرت قراءة الملف: " + err.message); }
+            try {
+              if (isPdf(f)) {
+                const r = PDFTools.questions(await PDFTools.lines(f), A.qLecture);
+                const ids = new Set(A.lectures.map(l => l.id));
+                const okL = r.ok.filter(q => ids.has(q.lecture_id)), badL = r.ok.filter(q => !ids.has(q.lecture_id));
+                A.qPreview = { ok: okL.map(({ num, ...q }) => q), bad: [...r.bad, ...badL].map(q => ({ row: "سؤال " + q.num })), sample: okL.slice(0, 3) };
+                if (!r.blocks) return flash("err", "لم أجد أسئلة مرقّمة في الملف. تأكد أن كل سؤال يبدأ برقمه مثل «1) ...».");
+              } else A.qPreview = parseQuestions(await readSheet(f));
+              render();
+            } catch (err) { flash("err", "تعذرت قراءة الملف: " + err.message); }
           } })),
         A.qPreview && h("div", { style: "margin-top:14px" },
           h("p", null, `جاهز للإضافة: ${A.qPreview.ok.length} سؤالًا.` + (A.qPreview.bad.length ? ` صفوف بها خطأ: ${A.qPreview.bad.map(b => b.row).join("، ")}. (رقم محاضرة غير موجود، أو سؤال بلا خيارين، أو إجابة غير محددة)` : "")),
+          A.qPreview.sample && A.qPreview.sample.length > 0 && h("ol", { class: "review", style: "margin-bottom:12px" }, A.qPreview.sample.map(q => h("li", null,
+            h("div", { class: "small muted" }, "المحاضرة " + q.lecture_id),
+            h("div", { style: "font-weight:600" }, q.body),
+            h("p", { class: "a" }, q.options.map((o, i) => `${LETTERS[i]}) ${o}${i === q.correct ? " ✓" : ""}`).join("    "))))),
           h("div", { class: "row" },
             h("button", { class: "btn", disabled: !A.qPreview.ok.length, onclick: async e => {
               e.target.disabled = true;
@@ -259,14 +358,37 @@
   async function tabLectures() {
     return h("section", { class: "panel" },
       h("h2", null, "المحاضرات"),
-      h("p", { class: "small muted" }, "عدّل عنوان كل محاضرة وموضوعها ليظهر للطالب في المسار، مثل: «النسبة والتناسب». المقاطع مربوطة بروابط Google Drive المستخرجة من صفحة المدرسة."),
+      h("p", { class: "small muted" }, "أضف ملزمة أو ملف شرح PDF لأي محاضرة فيظهر للطالب أسفل الفيديو. وعدّل عنوان كل محاضرة وموضوعها ليظهر للطالب في المسار، مثل: «النسبة والتناسب». المقاطع مربوطة بروابط Google Drive المستخرجة من صفحة المدرسة."),
       h("div", { class: "table-wrap" }, h("table", null,
-        h("thead", null, h("tr", null, h("th", null, "رقم"), h("th", null, "العنوان"), h("th", null, "الموضوع"), h("th", null, "المقاطع"), h("th", null, ""))),
+        h("thead", null, h("tr", null, h("th", null, "رقم"), h("th", null, "العنوان"), h("th", null, "الموضوع"), h("th", null, "المقاطع"), h("th", null, "ملفات PDF"), h("th", null, ""))),
         h("tbody", null, A.lectures.map(l => {
           const t = h("input", { type: "text" }); t.value = l.title;
           const tp = h("input", { type: "text", placeholder: "موضوع المحاضرة" }); tp.value = l.topic || "";
           return h("tr", null, h("td", null, l.id), h("td", null, t), h("td", null, tp),
             h("td", null, l.parts.map((p, i) => [i ? " " : "", h("a", { href: `https://drive.google.com/file/d/${p.drive_id}/view`, target: "_blank", rel: "noopener" }, p.label)])),
+            h("td", { class: "small", style: "min-width:200px" },
+              (l.files || []).map((f, i) => h("div", null,
+                h("a", { href: f.url, target: "_blank", rel: "noopener" }, f.name), " ",
+                h("button", { class: "btn ghost sm", style: "min-height:26px;padding:0 8px", "aria-label": "حذف " + f.name, onclick: async () => {
+                  if (!confirm(`حذف «${f.name}» من ${l.title}؟`)) return;
+                  const files = l.files.filter((_, j) => j !== i);
+                  const { error } = await sb.from("lectures").update({ files }).eq("id", l.id);
+                  if (error) return flash("err", error.message);
+                  await sb.storage.from("lecture-files").remove([f.path]);
+                  l.files = files; render();
+                } }, "×"))),
+              h("label", { class: "btn ghost sm", style: "margin-top:4px" }, "إضافة PDF",
+                h("input", { type: "file", accept: ".pdf,application/pdf", multiple: true, style: "display:none", onchange: async e => {
+                  const list = [...e.target.files]; if (!list.length) return;
+                  try {
+                    const added = [];
+                    for (const f of list) { const up = await uploadPdf("lecture-files", "lec-" + l.id, f); added.push({ name: baseName(f.name), ...up }); }
+                    const files = [...(l.files || []), ...added];
+                    const { error } = await sb.from("lectures").update({ files }).eq("id", l.id);
+                    if (error) throw error;
+                    l.files = files; flash("ok", `تمت إضافة ${added.length} ملف إلى ${l.title}.`);
+                  } catch (err) { flash("err", err.message.includes("files") ? "شغّل ملف update-pdf.sql في Supabase أولًا." : err.message); }
+                } }))),
             h("td", null, h("button", { class: "btn sm", onclick: async e => {
               const { error } = await sb.from("lectures").update({ title: t.value.trim() || l.title, topic: tp.value.trim() }).eq("id", l.id);
               if (error) return flash("err", error.message);

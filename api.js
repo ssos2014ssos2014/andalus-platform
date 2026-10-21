@@ -73,7 +73,7 @@ window.API = (() => {
       await wait();
       const s = DEMO_STUDENTS.find(x => x.national_id === nid); if (!s) return null;
       const st = load();
-      return { student: s, settings: SETTINGS, lectures: window.LECTURES.map(l => {
+      return { student: s, files: [], settings: SETTINGS, lectures: window.LECTURES.map(l => {
         const mine = st.attempts.filter(a => a.nid === nid && a.lid === l.id && a.submitted);
         return { ...l, question_count: qCount(l.id), watched: st.views.some(v => v.nid === nid && v.lid === l.id),
           done: done(st, nid, l.id), best: mine.length ? Math.max(...mine.map(a => a.percent)) : null, attempts_count: mine.length };
