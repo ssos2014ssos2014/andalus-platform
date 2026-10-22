@@ -464,3 +464,24 @@ tr:last-child td { border-bottom: 0; }
 .lc-cover.v { background: radial-gradient(120% 140% at 100% 0%, #8a5a9e 0%, #5b3570 45%, #2c1838 100%); }
 .soon-box { text-align: center; padding: 36px 16px; }
 .brand { font-size: 1.15rem; line-height: 1.35; }
+
+/* ================= ألوان دعاء البداية (أخضر) والنهاية (أحمر) مع لفت الانتباه ================= */
+.dua-start { background: linear-gradient(135deg, #1f7a4d, #2f9a63); border-color: #7fd6a4; color: #fff;
+  animation: duaIn .45s ease both, duaShake .6s ease .5s 2, duaGlowG 1.4s ease-in-out .5s 10; }
+.dua-end { background: linear-gradient(135deg, #a3271d, #c8402f); border-color: #f2a093; color: #fff;
+  animation: duaIn .45s ease both, duaShake .6s ease .5s 2, duaGlowR 1.4s ease-in-out .5s 10; }
+.dua-start p, .dua-end p { color: #fff; font-size: 1.28rem; font-weight: 700; text-shadow: 0 1px 2px rgba(0,0,0,.25); }
+.dua-start .dua-head strong, .dua-end .dua-head strong, .dua-start .dua-x, .dua-end .dua-x { color: #fff; }
+.dua-start .dua-head strong, .dua-end .dua-head strong { background: rgba(255,255,255,.18); padding: 2px 12px; border-radius: 99px; }
+.dua-start .dua-timer { background: rgba(255,255,255,.2); } .dua-start .dua-timer i { background: #c9f7dd; }
+.dua-end .dua-timer { background: rgba(255,255,255,.2); } .dua-end .dua-timer i { background: #ffd9d2; }
+.dua-start .dua-icon, .dua-end .dua-icon { font-size: 1.5rem; animation: duaBounce 1s ease-in-out infinite; }
+.dua-start::before, .dua-end::before { content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(110deg, transparent 30%, rgba(255,255,255,.28) 50%, transparent 70%); background-size: 250% 100%; animation: duaShine 2.2s linear infinite; }
+@keyframes duaGlowG { 0%, 100% { box-shadow: 0 12px 30px rgba(20,90,55,.3), 0 0 0 0 rgba(47,154,99,0); } 50% { box-shadow: 0 12px 30px rgba(20,90,55,.35), 0 0 0 8px rgba(47,154,99,.35); } }
+@keyframes duaGlowR { 0%, 100% { box-shadow: 0 12px 30px rgba(140,30,20,.3), 0 0 0 0 rgba(200,64,47,0); } 50% { box-shadow: 0 12px 30px rgba(140,30,20,.35), 0 0 0 8px rgba(200,64,47,.35); } }
+@keyframes duaShake { 0%, 100% { transform: translateX(0); } 20% { transform: translateX(-6px); } 40% { transform: translateX(6px); } 60% { transform: translateX(-4px); } 80% { transform: translateX(4px); } }
+@keyframes duaBounce { 0%, 100% { transform: translateY(0) scale(1); } 50% { transform: translateY(-4px) scale(1.15); } }
+@keyframes duaShine { from { background-position: 150% 0; } to { background-position: -100% 0; } }
+@media (prefers-color-scheme: dark) { .dua-start p, .dua-end p { color: #fff; } }
+@media (prefers-reduced-motion: reduce) { .dua-start, .dua-end { animation: duaIn .01s both; } .dua-start::before, .dua-end::before, .dua-start .dua-icon, .dua-end .dua-icon { animation: none; } }

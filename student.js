@@ -254,7 +254,7 @@
     let host = slot;
     if (!host) { host = document.getElementById("toast-fixed") || document.body.appendChild(h("div", { id: "toast-fixed", class: "toast-fixed" })); }
     host.replaceChildren();
-    const el = h("div", { class: "dua", role: "status", "aria-live": "polite" },
+    const el = h("div", { class: "dua dua-" + kind, role: kind === "exam" ? "status" : "alert", "aria-live": "polite" },
       h("div", { class: "dua-head" }, h("span", { class: "dua-icon", "aria-hidden": "true" }, "🤲"), h("strong", null, d.title),
         h("button", { class: "dua-x", "aria-label": "إغلاق", onclick: () => el.remove() }, "×")),
       d.lines.map(t => h("p", null, t)),
