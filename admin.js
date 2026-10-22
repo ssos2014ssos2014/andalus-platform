@@ -85,7 +85,7 @@
     const body = h("div", null, h("div", { class: "loading" }, "جارٍ التحميل…"));
     app.replaceChildren(
       h("header", { class: "band" }, h("div", { class: "band-inner" },
-        h("div", { class: "brand" }, (() => { const m = h("span", { class: "mark" }); m.innerHTML = '<svg viewBox="0 0 48 48" aria-hidden="true"><path d="M24 3l6.2 14.8L45 24l-14.8 6.2L24 45l-6.2-14.8L3 24l14.8-6.2z" fill="currentColor"/><rect x="15" y="15" width="18" height="18" transform="rotate(45 24 24)" fill="none" stroke="var(--tile-deep)" stroke-width="2.4"/></svg>'; return m; })(), h("div", null, (A.settings && A.settings.platform_name) || "منصة إتقان", h("small", null, "لوحة المعلم"))),
+        h("div", { class: "brand" }, (() => { const m = h("span", { class: "mark" }); m.innerHTML = '<svg viewBox="0 0 48 48" aria-hidden="true"><path d="M24 3l6.2 14.8L45 24l-14.8 6.2L24 45l-6.2-14.8L3 24l14.8-6.2z" fill="currentColor"/><rect x="15" y="15" width="18" height="18" transform="rotate(45 24 24)" fill="none" stroke="var(--tile-deep)" stroke-width="2.4"/></svg>'; return m; })(), h("div", null, (A.settings && A.settings.platform_name) || "التأسيس والتدريب لاختبار القدرات العامة", h("small", null, "لوحة المعلم"))),
         h("div", { class: "spacer" }),
         h("a", { class: "btn ghost sm", href: "index.html", target: "_blank" }, "صفحة الطالب"),
         h("button", { class: "btn ghost sm", onclick: async () => { await sb.auth.signOut(); viewLogin(); } }, "تسجيل الخروج"))),
@@ -305,7 +305,7 @@
     const { data: qs, error } = await sb.from("questions").select("*").eq("lecture_id", A.qLecture).order("id");
     if (error) throw error;
     const lsel = h("select", { onchange: e => { A.qLecture = +e.target.value; A.editQ = null; render(); } },
-      A.lectures.map(l => h("option", { value: String(l.id), selected: l.id === A.qLecture }, `${l.title}${l.topic ? " — " + l.topic : ""} (${per[l.id] || 0} سؤال)`)));
+      A.lectures.map(l => h("option", { value: String(l.id), selected: l.id === A.qLecture }, `${l.section === "verbal" ? "لفظي: " : ""}${l.title}${l.topic ? " — " + l.topic : ""} (${per[l.id] || 0} سؤال)`)));
 
     return [
       h("section", { class: "panel" },
@@ -410,47 +410,109 @@
   }
 
   // ---------- المحاضرات ----------
+  // يقبل رابط يوتيوب أو رابط ملف فيديو مباشر أو رابط Google Drive
+  function parseSource(link) {
+    const t = String(link || "").trim(); if (!t) return null;
+    let m = t.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/|live\/))([\w-]{11})/) || (/^[\w-]{11}$/.test(t) && [0, t]);
+    if (m) return { youtube_id: m[1] };
+    m = t.match(/drive\.google\.com\/(?:file\/d\/|open\?id=)([\w-]{20,})/); if (m) return { drive_id: m[1] };
+    if (/^https?:\/\/.+\.(mp4|webm|m4v|mov)(\?.*)?$/i.test(t) || /^https:\/\/.+\/storage\/v1\/object\/public\//.test(t)) return { url: t };
+    return null;
+  }
+  const srcLabel = p => p.youtube_id ? "يوتيوب ✓ (حفظ بالثانية)" : p.url ? "ملف فيديو ✓ (حفظ بالثانية)" : p.drive_id ? "Google Drive (حفظ تقريبي)" : "بلا مقطع";
+  const srcLink = p => p.youtube_id ? `https://youtu.be/${p.youtube_id}` : p.url || (p.drive_id ? `https://drive.google.com/file/d/${p.drive_id}/view` : "");
+  async function saveLecture(l, patch) {
+    const { error } = await sb.from("lectures").update(patch).eq("id", l.id);
+    if (error) throw error; Object.assign(l, patch);
+  }
   async function tabLectures() {
-    return h("section", { class: "panel" },
-      h("h2", null, "المحاضرات"),
-      h("p", { class: "small muted" }, "أضف ملزمة أو ملف شرح PDF لأي محاضرة فيظهر للطالب أسفل الفيديو. وعدّل عنوان كل محاضرة وموضوعها ليظهر للطالب في المسار، مثل: «النسبة والتناسب». المقاطع مربوطة بروابط Google Drive المستخرجة من صفحة المدرسة."),
-      h("div", { class: "table-wrap" }, h("table", null,
-        h("thead", null, h("tr", null, h("th", null, "رقم"), h("th", null, "العنوان"), h("th", null, "الموضوع"), h("th", null, "المقاطع"), h("th", null, "ملفات PDF"), h("th", null, ""))),
-        h("tbody", null, A.lectures.map(l => {
-          const t = h("input", { type: "text" }); t.value = l.title;
-          const tp = h("input", { type: "text", placeholder: "موضوع المحاضرة" }); tp.value = l.topic || "";
-          return h("tr", null, h("td", null, l.id), h("td", null, t), h("td", null, tp),
-            h("td", null, l.parts.map((p, i) => [i ? " " : "", h("a", { href: `https://drive.google.com/file/d/${p.drive_id}/view`, target: "_blank", rel: "noopener" }, p.label)])),
-            h("td", { class: "small", style: "min-width:200px" },
-              (l.files || []).map((f, i) => h("div", null,
-                h("a", { href: f.url, target: "_blank", rel: "noopener" }, f.name), " ",
-                h("button", { class: "btn ghost sm", style: "min-height:26px;padding:0 8px", "aria-label": "حذف " + f.name, onclick: async () => {
-                  if (!confirm(`حذف «${f.name}» من ${l.title}؟`)) return;
-                  const files = l.files.filter((_, j) => j !== i);
-                  const { error } = await sb.from("lectures").update({ files }).eq("id", l.id);
-                  if (error) return flash("err", error.message);
-                  await sb.storage.from("lecture-files").remove([f.path]);
-                  l.files = files; render();
-                } }, "×"))),
-              h("label", { class: "btn ghost sm", style: "margin-top:4px" }, "إضافة PDF",
-                h("input", { type: "file", accept: ".pdf,application/pdf", multiple: true, style: "display:none", onchange: async e => {
-                  const list = [...e.target.files]; if (!list.length) return;
-                  try {
-                    const added = [];
-                    for (const f of list) { const up = await uploadPdf("lecture-files", "lec-" + l.id, f); added.push({ name: baseName(f.name), ...up }); }
-                    const files = [...(l.files || []), ...added];
-                    const { error } = await sb.from("lectures").update({ files }).eq("id", l.id);
-                    if (error) throw error;
-                    l.files = files; flash("ok", `تمت إضافة ${added.length} ملف إلى ${l.title}.`);
-                  } catch (err) { flash("err", err.message.includes("files") ? "شغّل ملف update-pdf.sql في Supabase أولًا." : err.message); }
-                } }))),
-            h("td", null, h("button", { class: "btn sm", onclick: async e => {
-              const { error } = await sb.from("lectures").update({ title: t.value.trim() || l.title, topic: tp.value.trim() }).eq("id", l.id);
-              if (error) return flash("err", error.message);
-              l.title = t.value.trim() || l.title; l.topic = tp.value.trim();
-              e.target.textContent = "تم الحفظ"; setTimeout(() => { e.target.textContent = "حفظ"; }, 1500);
-            } }, "حفظ")));
-        })))));
+    const sec = A.lsec || "quant";
+    const list = A.lectures.filter(l => (l.section || "quant") === sec);
+    const bulk = h("textarea", { placeholder: "كل سطر: رقم المحاضرة ثم الرابط\nمثال:\n1 https://youtu.be/xxxxxxxxxxx\n24-2 https://youtu.be/yyyyyyyyyyy   (الجزء الثاني من المحاضرة 24)", style: "min-height:120px;direction:ltr;text-align:left" });
+    return [
+      h("div", { class: "seg", role: "group", "aria-label": "القسم", style: "margin-bottom:14px" },
+        [["quant", "القسم الكمي"], ["verbal", "القسم اللفظي"]].map(([k, t]) => h("button", { "aria-pressed": String(sec === k), onclick: () => { A.lsec = k; render(); } }, t))),
+      h("section", { class: "panel" },
+        h("h2", null, "ربط المقاطع بروابط يوتيوب أو ملفات فيديو (دفعة واحدة)"),
+        h("p", { class: "small muted" }, "لحفظ مكان توقف الطالب بالثانية الفعلية، اربط كل مقطع برابط يوتيوب (يُفضَّل «غير مدرج») أو برابط ملف فيديو مباشر. الصق الروابط هنا: كل سطر فيه رقم المحاضرة ثم الرابط. للجزء الثاني اكتب 24-2."),
+        bulk,
+        h("div", { class: "row", style: "margin-top:10px" }, h("button", { class: "btn", onclick: async e => {
+          const lines = bulk.value.split(/\n+/).map(x => x.trim()).filter(Boolean); if (!lines.length) return;
+          e.target.disabled = true; let ok = 0; const bad = [];
+          for (const line of lines) {
+            const m = toLatinDigits(line.split(/\s+/)[0]).match(/^(\d+)(?:-(\d+))?$/);
+            const src = parseSource(line.split(/\s+/).slice(1).join(" "));
+            const n = m ? +m[1] : 0, id = sec === "verbal" && n < 1000 ? n + 1000 : n;
+            const l = A.lectures.find(x => x.id === id);
+            if (!m || !src || !l) { bad.push(line.slice(0, 40)); continue; }
+            const pi = m[2] ? +m[2] - 1 : 0, parts = [...(l.parts || [])];
+            while (parts.length <= pi) parts.push({ label: parts.length ? `الجزء ${["الأول", "الثاني", "الثالث", "الرابع"][parts.length] || parts.length + 1}` : "المحاضرة" });
+            const keep = { label: parts[pi].label }; parts[pi] = { ...keep, ...src, ...(parts[pi].drive_id && !src.drive_id ? { drive_id: parts[pi].drive_id } : {}) };
+            try { await saveLecture(l, { parts }); ok++; } catch (err) { bad.push(line.slice(0, 40) + " (" + err.message + ")"); }
+          }
+          flash(bad.length ? "info" : "ok", `تم ربط ${ok} مقطع.` + (bad.length ? ` لم يُقرأ: ${bad.join("، ")}` : ""));
+        } }, "حفظ الروابط"))),
+      h("section", { class: "panel" },
+        h("div", { class: "row", style: "justify-content:space-between" },
+          h("h2", { style: "margin:0" }, `محاضرات ${sec === "verbal" ? "القسم اللفظي" : "القسم الكمي"} (${list.length})`),
+          h("button", { class: "btn gold sm", onclick: async () => {
+            const base = sec === "verbal" ? 1000 : 0;
+            const nextId = Math.max(base, ...A.lectures.filter(l => (l.section || "quant") === sec).map(l => l.id)) + 1;
+            if (sec === "quant" && nextId > 999) return flash("err", "وصلت للحد الأعلى لأرقام القسم الكمي.");
+            const row = { id: nextId, title: `المحاضرة ${nextId - base}`, topic: "", parts: [], section: sec };
+            const { error } = await sb.from("lectures").insert(row);
+            if (error) return flash("err", error.message);
+            A.lectures.push(row); A.lectures.sort((a, b) => a.id - b.id); flash("ok", `أضيفت ${row.title}. اربطها بمقطع من الأعلى أو من خانة الرابط.`);
+          } }, "+ إضافة محاضرة")),
+        h("p", { class: "small muted" }, "أضف ملزمة PDF لأي محاضرة فتظهر للطالب بجانب المقطع. وعدّل عنوان كل محاضرة وموضوعها ليظهر في بطاقتها."),
+        list.length ? h("div", { class: "table-wrap" }, h("table", null,
+          h("thead", null, h("tr", null, h("th", null, "رقم"), h("th", null, "العنوان والموضوع"), h("th", null, "المقاطع"), h("th", null, "ملفات PDF"), h("th", null, ""))),
+          h("tbody", null, list.map(l => {
+            const t = h("input", { type: "text" }); t.value = l.title;
+            const tp = h("input", { type: "text", placeholder: "موضوع المحاضرة", style: "margin-top:6px" }); tp.value = l.topic || "";
+            const partRows = (l.parts || []).map((p, i) => {
+              const inp = h("input", { type: "text", placeholder: "رابط يوتيوب أو ملف فيديو", style: "direction:ltr;min-height:36px" }); inp.value = srcLink(p);
+              return h("div", { style: "margin-bottom:8px" },
+                h("div", { class: "small" }, h("strong", null, p.label || `الجزء ${i + 1}`), " · ", h("span", { class: p.youtube_id || p.url ? "chip-pass" : "muted" }, srcLabel(p))),
+                h("div", { class: "row", style: "gap:6px;flex-wrap:nowrap" }, inp,
+                  h("button", { class: "btn ghost sm", onclick: async () => {
+                    const src = parseSource(inp.value); if (!src) return flash("err", "الرابط غير معروف. استخدم رابط يوتيوب أو رابط ملف فيديو مباشر.");
+                    const parts = [...l.parts]; parts[i] = { label: p.label, ...src, ...(p.drive_id && !src.drive_id ? { drive_id: p.drive_id } : {}) };
+                    try { await saveLecture(l, { parts }); flash("ok", `تم ربط ${l.title}.`); } catch (err) { flash("err", err.message); }
+                  } }, "حفظ")));
+            });
+            if (!(l.parts || []).length) {
+              const inp = h("input", { type: "text", placeholder: "رابط المقطع", style: "direction:ltr;min-height:36px" });
+              partRows.push(h("div", { class: "row", style: "gap:6px;flex-wrap:nowrap" }, inp, h("button", { class: "btn ghost sm", onclick: async () => {
+                const src = parseSource(inp.value); if (!src) return flash("err", "الرابط غير معروف.");
+                try { await saveLecture(l, { parts: [{ label: "المحاضرة", ...src }] }); flash("ok", "تم الربط."); } catch (err) { flash("err", err.message); }
+              } }, "حفظ")));
+            }
+            return h("tr", null, h("td", null, l.id > 1000 ? l.id - 1000 : l.id),
+              h("td", { style: "min-width:200px" }, t, tp),
+              h("td", { style: "min-width:300px" }, partRows),
+              h("td", { class: "small", style: "min-width:180px" },
+                (l.files || []).map((f, i) => h("div", null,
+                  h("a", { href: f.url, target: "_blank", rel: "noopener" }, f.name), " ",
+                  h("button", { class: "btn ghost sm", style: "min-height:26px;padding:0 8px", "aria-label": "حذف " + f.name, onclick: async () => {
+                    if (!confirm(`حذف «${f.name}» من ${l.title}؟`)) return;
+                    const files = l.files.filter((_, j) => j !== i);
+                    try { await saveLecture(l, { files }); await sb.storage.from("lecture-files").remove([f.path]); render(); } catch (err) { flash("err", err.message); }
+                  } }, "×"))),
+                h("label", { class: "btn ghost sm", style: "margin-top:4px" }, "إضافة PDF",
+                  h("input", { type: "file", accept: ".pdf,application/pdf", multiple: true, style: "display:none", onchange: async e => {
+                    const fl = [...e.target.files]; if (!fl.length) return;
+                    try {
+                      const added = [];
+                      for (const f of fl) { const up = await uploadPdf("lecture-files", "lec-" + l.id, f); added.push({ name: baseName(f.name), ...up }); }
+                      await saveLecture(l, { files: [...(l.files || []), ...added] }); flash("ok", `تمت إضافة ${added.length} ملف إلى ${l.title}.`);
+                    } catch (err) { flash("err", err.message); }
+                  } }))),
+              h("td", null, h("button", { class: "btn sm", onclick: async e => {
+                try { await saveLecture(l, { title: t.value.trim() || l.title, topic: tp.value.trim() }); e.target.textContent = "تم الحفظ"; setTimeout(() => { e.target.textContent = "حفظ"; }, 1500); }
+                catch (err) { flash("err", err.message); }
+              } }, "حفظ")));
+          })))) : h("p", { class: "muted" }, "لا توجد محاضرات في هذا القسم بعد. اضغط «+ إضافة محاضرة» ثم اربطها بمقطع."))];
   }
 
   // ---------- النتائج ----------
@@ -504,12 +566,12 @@
     const qn = h("input", { type: "number", min: "1", max: "100", value: String(s.questions_per_quiz) });
     const sn = h("input", { type: "text", value: s.school_name });
     const cn = h("input", { type: "text", value: s.course_name });
-    const pn = h("input", { type: "text", value: s.platform_name || "منصة إتقان" });
+    const pn = h("input", { type: "text", value: s.platform_name || "التأسيس والتدريب لاختبار القدرات العامة" });
     const am = h("select", null, [["pass", "مرتبطة باجتياز اختبار المحاضرة السابقة بنسبة الاجتياز"], ["watch", "تُفتح تباعًا بعد مشاهدة المحاضرة السابقة"], ["open", "جميع المحاضرات مفتوحة للطلاب"]]
       .map(([v, t]) => h("option", { value: v, selected: (s.access_mode || "pass") === v }, t)));
     return h("form", { class: "panel", onsubmit: async e => {
       e.preventDefault();
-      const { error } = await sb.from("settings").update({ pass_mark: +pm.value, questions_per_quiz: +qn.value, school_name: sn.value.trim(), course_name: cn.value.trim(), platform_name: pn.value.trim() || "منصة إتقان", access_mode: am.value }).eq("id", 1);
+      const { error } = await sb.from("settings").update({ pass_mark: +pm.value, questions_per_quiz: +qn.value, school_name: sn.value.trim(), course_name: cn.value.trim(), platform_name: pn.value.trim() || "التأسيس والتدريب لاختبار القدرات العامة", access_mode: am.value }).eq("id", 1);
       error ? flash("err", error.message) : flash("ok", "تم حفظ الإعدادات.");
     } },
       h("h2", null, "الإعدادات"),
