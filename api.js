@@ -35,6 +35,7 @@ window.API = (() => {
     submitQuiz: (nid, attempt, answers) => rpc("submit_quiz", { p_attempt: attempt, p_nid: nid, p_answers: answers }),
     startPractice: (nid, lid) => rpc("start_practice", { p_nid: nid, p_lid: lid }),
     login: nid => rpc("student_login", { p_nid: nid }),
+    savePosition: (nid, lid, part, pos) => rpc("save_position", { p_nid: nid, p_lid: lid, p_part: part, p_pos: pos }),
     publicSettings: () => rpc("public_settings", {}),
     ping: (sid, nid) => rpc("student_ping", { p_session: sid, p_nid: nid }),
     setPhone: (nid, phone) => rpc("set_phone", { p_nid: nid, p_phone: phone }),
@@ -79,6 +80,7 @@ window.API = (() => {
   const wait = () => new Promise(r => setTimeout(r, 150));
   const demoApi = {
     async publicSettings() { return SETTINGS; },
+    async savePosition(nid, lid, part, pos) { const st = load(); ((st.pos ||= {})[nid + ":" + lid] ||= {})[part] = pos; save(st); return true; },
     async login(nid) {
       await wait(); const st = load();
       if (!DEMO_STUDENTS.some(x => x.national_id === nid)) return null;
@@ -120,7 +122,7 @@ window.API = (() => {
         max: mine.length ? Math.max(...mine) : null, min: mine.length ? Math.min(...mine) : null, avg: mine.length ? Math.round(mine.reduce((a, b) => a + b, 0) / mine.length) : null };
       return { student: { ...s, phone: (st.phones || {})[nid] || null }, stats, files: [], settings: SETTINGS, lectures: window.LECTURES.map(l => {
         const mine = st.attempts.filter(a => a.nid === nid && a.lid === l.id && a.submitted);
-        return { ...l, unlocked: unlocked(st, nid, l.id), exam_mode: window.EXAMS && window.EXAMS[l.id] ? "generated" : "bank", question_count: qCount(l.id), watched: st.views.some(v => v.nid === nid && v.lid === l.id),
+        return { ...l, positions: (st.pos || {})[nid + ":" + l.id] || {}, unlocked: unlocked(st, nid, l.id), exam_mode: window.EXAMS && window.EXAMS[l.id] ? "generated" : "bank", question_count: qCount(l.id), watched: st.views.some(v => v.nid === nid && v.lid === l.id),
           done: done(st, nid, l.id), best: mine.length ? Math.max(...mine.map(a => a.percent)) : null, attempts_count: mine.length };
       }) };
     },

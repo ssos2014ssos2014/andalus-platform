@@ -31,7 +31,10 @@
   }
   const lecture = id => lectures().find(l => l.id === id);
   const nextOf = id => lectures().find(l => l.id > id);
-  function go(view, extra) { Object.assign(S, { view, error: "" }, extra || {}); render(); window.scrollTo(0, 0); }
+  function go(view, extra) {
+    if (S.play && (view !== "lecture" || (extra && ((extra.lid && extra.lid !== S.play.lid) || (extra.part != null && extra.part !== S.play.part))))) { savePlay(true); }
+    Object.assign(S, { view, error: "" }, extra || {}); render(); window.scrollTo(0, 0);
+  }
   async function refresh() { S.data = await API.portal(S.nid); }
   async function refresh0(nid, data) { S.nid = nid; S.data = await API.portal(nid) || data; }
 
@@ -98,18 +101,26 @@
     const ACCESS = { open: "جميع المحاضرات مفتوحة لك.", watch: "تُفتح كل محاضرة بعد مشاهدة التي قبلها.", pass: `تُفتح كل محاضرة بعد اجتياز اختبار التي قبلها بنسبة ${AR(settings().pass_mark)}٪.` };
 
     const tile = (label, value, sub) => h("div", { class: "stat" }, h("div", { class: "v" }, value), h("div", { class: "k" }, label), sub && h("div", { class: "s" }, sub));
-    const card = l => h("li", null, h("button", { class: "lcard " + l.state + (l.done ? " is-done" : ""), disabled: l.state === "locked",
-        onclick: () => go("lecture", { lid: l.id, part: 0 }), "aria-label": `${l.title}، ${l.done ? "مكتملة" : l.state === "locked" ? "مقفلة" : "متاحة"}` },
-      h("div", { class: "lc-top" },
-        h("span", { class: "lc-num" }, AR(String(l.id).padStart(2, "0"))),
-        h("span", { class: "chip " + (l.done ? "done" : l.state) }, l.done ? "مكتملة ✓" : l.state === "locked" ? "🔒 مقفلة" : l.watched ? "شاهدتها" : "متاحة")),
-      h("div", { class: "lc-title" }, l.title),
-      h("div", { class: "lc-topic" }, l.topic || (l.state === "locked" ? "" : "شاهد المحاضرة ثم اختبر نفسك")),
-      h("div", { class: "lc-foot" },
-        h("span", null, l.parts.length > 1 ? `🎬 ${AR(l.parts.length)} أجزاء` : "🎬 مقطع"),
-        l.exam_mode === "generated" ? h("span", null, "📝 اختبار محاكي") : l.question_count ? h("span", null, "📝 اختبار") : null,
-        l.best != null && h("span", { class: "best" }, "أفضل " + pct(l.best))),
-      l.best != null && h("div", { class: "lc-bar" }, h("i", { style: `width:${l.best}%` }))));
+    const card = l => {
+      const pos = Math.max(0, ...Object.values(l.positions || { 0: 0 }));
+      const isNext = current && current.id === l.id && !l.done;
+      const status = l.done ? ["done", "مكتملة"] : l.state === "locked" ? ["locked", "مقفلة"] : l.watched ? ["seen", "شاهدتها"] : pos ? ["progress", "قيد المشاهدة"] : ["open", "متاحة"];
+      return h("li", null, h("button", { class: `lcard ${l.state} st-${status[0]}${isNext ? " is-next" : ""}`, disabled: l.state === "locked",
+          onclick: () => go("lecture", { lid: l.id, part: 0 }), "aria-label": `${l.title}، ${status[1]}` },
+        h("div", { class: "lc-cover" },
+          h("span", { class: "lc-wm", "aria-hidden": "true" }, AR(String(l.id).padStart(2, "0"))),
+          isNext && h("span", { class: "lc-ribbon" }, "التالية"),
+          h("span", { class: "lc-play", "aria-hidden": "true" }, l.state === "locked" ? "🔒" : l.done ? "✓" : h("span", { class: "tri" })),
+          h("span", { class: "lc-kicker" }, (l.topic ? "المحاضرة " + AR(l.id) : "تأسيس القدرات · كمي") + (l.parts.length > 1 ? ` · ${AR(l.parts.length)} أجزاء` : ""))),
+        h("div", { class: "lc-body" },
+          h("div", { class: "lc-title" }, l.topic || l.title),
+          h("div", { class: "lc-meta" },
+            h("span", { class: "pill " + status[0] }, status[1]),
+            l.exam_mode === "generated" ? h("span", null, "اختبار محاكي") : l.question_count ? h("span", null, "اختبار") : null,
+            pos > 0 && !l.done && h("span", null, "توقفت عند " + tfmt(pos))),
+          l.best != null && h("div", { class: "lc-score" }, h("div", { class: "lc-bar" }, h("i", { style: `width:${l.best}%` })), h("span", null, "أفضل درجة " + pct(l.best))))));
+    };
+    const unitNames = ["الأولى", "الثانية", "الثالثة", "الرابعة", "الخامسة", "السادسة", "السابعة", "الثامنة"];
 
     return [band(), h("main", { class: "wrap" },
       h("section", { class: "hero" },
@@ -158,7 +169,11 @@
               h("button", { "aria-pressed": String(f === k), onclick: () => { S.filter = k; render(); } }, t)))),
         h("p", { class: "small muted" }, ACCESS[settings().access_mode] || ""),
         groups.length ? groups.map((g, i) => g && h("div", { class: "unit" },
-          h("h3", null, `المحاضرات ${AR(g[0].id)} – ${AR(g[g.length - 1].id)}`),
+          h("div", { class: "unit-head" },
+            h("span", { class: "unit-no" }, AR(i + 1)),
+            h("div", null, h("h3", null, `الوحدة ${unitNames[i] || AR(i + 1)}`), h("div", { class: "small muted" }, `المحاضرات ${AR(g[0].id)} – ${AR(g[g.length - 1].id)}`)),
+            h("div", { class: "unit-prog" }, h("span", { class: "small" }, `${AR(g.filter(x => x.done).length)} من ${AR(g.length)}`),
+              h("div", { class: "bar" }, h("i", { style: `width:${g.filter(x => x.done).length * 100 / g.length}%` })))),
           h("ul", { class: "lgrid" }, g.map(card))))
           : h("p", { class: "muted" }, f === "done" ? "لم تكمل أي محاضرة بعد." : "لا توجد محاضرات في هذا التصنيف.")))];
   }
@@ -192,6 +207,86 @@
     pingTimer = setInterval(() => { if (document.visibilityState === "visible" && S.nid) API.ping(sid, S.nid).catch(() => {}); }, 60000);
   }
 
+  // ---------- الأدعية (إشعارات لمدة ١٠ ثوانٍ لا تغطي المقطع) ----------
+  const DUA = {
+    start: { title: "قبل أن تبدأ", lines: ["«اللهم إني أسألك فهم النبيّين، وحفظ الملائكة المقربين»", "«اللهم افتح عليّ فتوح العارفين، وعلّمني ما ينفعني، وانفعني بما علمتني، وزدني علمًا»"] },
+    end: { title: "ختام المشاهدة", lines: ["«اللهم إني أستودعك ما قرأت، وما حفظت، وما تعلّمت، فردّه عند حاجتي إليه، إنك على كل شيء قدير»", "«اللَّهُمَّ انفَعْني بما عَلَّمتَني، وعلِّمْني ما يَنفعُني، وارزُقْني عِلمًا تَنفعُني به»"] },
+    exam: { title: "قبل الاختبار", lines: ["«اللهم لا سهل إلا ما جعلته سهلاً، وأنت تجعل الحزن إذا شئت سهلاً»", "«رب اشرح لي صدري، ويسر لي أمري، واحلل عقدة من لساني، يفقهوا قولي»"] }
+  };
+  function toast(kind) {
+    const d = DUA[kind]; if (!d) return;
+    const slot = document.getElementById("toast-slot");
+    let host = slot;
+    if (!host) { host = document.getElementById("toast-fixed") || document.body.appendChild(h("div", { id: "toast-fixed", class: "toast-fixed" })); }
+    host.replaceChildren();
+    const el = h("div", { class: "dua", role: "status", "aria-live": "polite" },
+      h("div", { class: "dua-head" }, h("span", { class: "dua-icon", "aria-hidden": "true" }, "🤲"), h("strong", null, d.title),
+        h("button", { class: "dua-x", "aria-label": "إغلاق", onclick: () => el.remove() }, "×")),
+      d.lines.map(t => h("p", null, t)),
+      h("div", { class: "dua-timer" }, h("i")));
+    host.append(el);
+    setTimeout(() => { el.classList.add("out"); setTimeout(() => el.remove(), 400); }, 10000);
+  }
+
+  // ---------- مشغّل المقطع وحفظ مكان التوقف ----------
+  // مشغّل Google Drive لا يسمح للموقع بقراءة وقت المقطع، لذلك يُحسب مكان التوقف من مدة المشاهدة الفعلية،
+  // ويستطيع الطالب تعديله بالأزرار قبل الحفظ.
+  let playTimer = null, saveTimer = null;
+  const posOf = l => ((l && l.positions) || {})[String(S.part)] || 0;
+  function playPos() { const P = S.play; return P ? Math.max(0, Math.round(P.start + P.acc + P.adj)) : 0; }
+  function startPlay(l, from) {
+    S.play = { lid: l.id, part: S.part, start: from, acc: 0, adj: 0 };
+    render(); toast("start");
+    clearInterval(playTimer); clearInterval(saveTimer);
+    playTimer = setInterval(() => {
+      if (!S.play) return clearInterval(playTimer);
+      if (document.visibilityState === "visible") S.play.acc += 1;
+      const el = document.getElementById("live-pos"); if (el) el.textContent = tfmt(playPos());
+    }, 1000);
+    saveTimer = setInterval(() => savePlay(false), 30000);
+  }
+  async function savePlay(stop) {
+    const P = S.play; if (!P) return;
+    const pos = playPos();
+    try { await API.savePosition(S.nid, P.lid, P.part, pos); } catch {}
+    const l = (S.data?.lectures || []).find(x => x.id === P.lid); if (l) { l.positions = { ...(l.positions || {}), [String(P.part)]: pos }; }
+    if (stop) { S.play = null; clearInterval(playTimer); clearInterval(saveTimer); }
+  }
+  async function stopPlay(showDua) {
+    if (!S.play) return;
+    await savePlay(true);
+    render();
+    if (showDua) toast("end");
+  }
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden" && S.play) savePlay(false); });
+
+  function player(l, part) {
+    const playing = S.play && S.play.lid === l.id && S.play.part === S.part;
+    const saved = posOf(l);
+    if (!playing) {
+      return h("div", { class: "video poster" },
+        h("div", { class: "poster-inner" },
+          h("span", { class: "poster-num" }, AR(String(l.id).padStart(2, "0"))),
+          h("div", { class: "poster-title" }, l.title + (l.parts.length > 1 ? ` · ${part.label}` : "")),
+          h("button", { class: "play-btn", onclick: () => startPlay(l, saved) },
+            h("span", { class: "tri", "aria-hidden": "true" }), saved ? `تابع المشاهدة من ${tfmt(saved)}` : "ابدأ المشاهدة"),
+          saved > 0 && h("button", { class: "linkbtn light", onclick: () => startPlay(l, 0) }, "ابدأ من البداية")));
+    }
+    const t = S.play.start > 0 ? `?t=${S.play.start}s` : "";
+    return h("div", { class: "video" },
+      h("iframe", { src: `https://drive.google.com/file/d/${encodeURIComponent(part.drive_id)}/preview${t}`, allow: "autoplay; fullscreen",
+        allowfullscreen: true, title: `${l.title} — ${part.label}` }));
+  }
+  function playerBar(l) {
+    if (!(S.play && S.play.lid === l.id && S.play.part === S.part)) return null;
+    const adj = s => h("button", { class: "btn ghost sm", onclick: () => { S.play.adj += s; const el = document.getElementById("live-pos"); if (el) el.textContent = tfmt(playPos()); } },
+      (s > 0 ? "+" : "−") + (Math.abs(s) >= 60 ? AR(Math.abs(s) / 60) + " د" : AR(Math.abs(s)) + " ث"));
+    return h("div", { class: "pbar" },
+      h("div", { class: "pbar-pos" }, h("span", { class: "small muted" }, "مكان التوقف"), h("strong", { id: "live-pos" }, tfmt(playPos()))),
+      h("div", { class: "row", style: "gap:6px" }, adj(-60), adj(-10), adj(10), adj(60)),
+      h("button", { class: "btn", onclick: () => stopPlay(true) }, "⏸ إيقاف المشاهدة وحفظ مكان التوقف"));
+  }
+
   // ---------- المحاضرة ----------
   function viewLecture() {
     const l = lecture(S.lid);
@@ -205,7 +300,8 @@
 
     const markBtn = h("button", { class: "btn", onclick: async () => {
       markBtn.disabled = true;
-      try { await API.markWatched(S.nid, l.id); await refresh(); render(); }
+      const wasPlaying = !!S.play; if (wasPlaying) await savePlay(true);
+      try { await API.markWatched(S.nid, l.id); await refresh(); render(); toast("end"); }
       catch (e) { S.error = e.message; render(); }
     } }, l.parts.length > 1 ? "أنهيت مشاهدة جميع الأجزاء" : "أنهيت مشاهدة المحاضرة");
 
@@ -217,23 +313,27 @@
       try {
         const q = await API.startQuiz(S.nid, l.id);
         const order = {}; q.questions.forEach(x => { order[x.id] = shuffle(x.options.map((_, i) => i)); });
-        go("quiz", { quiz: { ...q, lid: l.id, i: 0, answers: {}, order, started: Date.now() } });
+        go("quiz", { quiz: { ...q, lid: l.id, i: 0, answers: {}, order, started: Date.now() } }); toast("exam");
       } catch (e) { S.error = e.message; render(); }
     } }, l.attempts_count ? "اختبار جديد بأسئلة مختلفة" : "ابدأ الاختبار");
 
-    return [band(), h("main", { class: "wrap" },
+    return [band(), h("main", { class: "wrap wide" },
       h("div", { class: "row", style: "margin-bottom:14px" },
-        h("button", { class: "btn ghost sm", onclick: () => go("home") }, "العودة للمسار")),
-      h("h1", null, l.title),
-      l.topic && h("p", { class: "muted" }, l.topic),
+        h("button", { class: "btn ghost sm", onclick: () => go("home") }, "→ العودة للمحاضرات")),
+      h("div", { class: "lec-head" },
+        h("span", { class: "lec-badge" }, AR(String(l.id).padStart(2, "0"))),
+        h("div", null, h("h1", { style: "margin:0" }, l.title), l.topic && h("p", { class: "muted", style: "margin:0" }, l.topic))),
       S.error && h("div", { class: "alert err", role: "alert" }, S.error),
       l.parts.length > 1 && h("div", { class: "tabs", role: "group", "aria-label": "أجزاء المحاضرة" },
         l.parts.map((p, i) => h("button", { "aria-pressed": String(i === S.part), onclick: () => go("lecture", { part: i }) }, p.label))),
-      h("div", { class: "video" },
-        h("iframe", { src: `https://drive.google.com/file/d/${encodeURIComponent(part.drive_id)}/preview`, allow: "autoplay; fullscreen",
-          allowfullscreen: true, title: `${l.title} — ${part.label}`, loading: "lazy" })),
+      h("div", { class: "lec-layout" },
+      h("div", { class: "lec-main" },
+      h("div", { class: "theater" }, player(l, part)),
+      playerBar(l),
       h("p", { class: "small muted", style: "margin-top:8px" }, "إذا لم يظهر الفيديو: ",
-        h("a", { href: `https://drive.google.com/file/d/${encodeURIComponent(part.drive_id)}/view`, target: "_blank", rel: "noopener" }, "افتحه في Google Drive")),
+        h("a", { href: `https://drive.google.com/file/d/${encodeURIComponent(part.drive_id)}/view`, target: "_blank", rel: "noopener" }, "افتحه في Google Drive"))),
+      h("aside", { class: "lec-side" },
+      h("div", { id: "toast-slot", class: "toast-slot" }),
 
       (l.files || []).length > 0 && h("section", { class: "panel", style: "margin-top:16px" },
         h("h3", null, "ملفات المحاضرة"),
@@ -253,8 +353,8 @@
                   : l.watched ? (sim ? `اختبار محاكي محوسب بنمط قياس: ${sim.blueprint.reduce((t, b) => t + b[1], 0)} سؤالًا في ${sim.minutes} دقيقة، ونسبة الاجتياز ${st.pass_mark}%. تتجدد الأسئلة في كل محاولة.` : `${qn} أسئلة، ونسبة الاجتياز ${st.pass_mark}%.`) + (l.attempts_count ? ` محاولاتك السابقة: ${l.attempts_count}، أفضلها ${l.best}%.` : "")
                   : "يُفتح بعد إنهاء المشاهدة."),
               startBtn])),
-      l.done && next && h("div", { class: "row", style: "margin-top:18px" },
-        h("button", { class: "btn", onclick: () => go("lecture", { lid: next.id, part: 0 }) }, "انتقل إلى " + next.title)))];
+      l.done && next && h("div", { class: "row", style: "margin-top:14px" },
+        h("button", { class: "btn", style: "width:100%", onclick: () => go("lecture", { lid: next.id, part: 0 }) }, "انتقل إلى " + next.title)))))];
   }
 
   // ---------- الاختبار المحاكي ----------
@@ -352,7 +452,7 @@
     const items = ExamEngine.build(def, Number(r.seed) || Date.now(), r.used || []);
     S.sim = { lid: l.id, attempt: r.attempt_id, pass_mark: r.pass_mark, items, answers: {}, flags: {}, i: 0,
       deadline: Date.now() + def.minutes * 60000, started: Date.now(), filter: null };
-    saveSim(); go("sim");
+    saveSim(); go("sim"); toast("exam");
   }
   function simNav() {
     const Q = S.sim;
