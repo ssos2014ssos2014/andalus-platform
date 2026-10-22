@@ -294,7 +294,7 @@
     return null;
   }
   function startPlay(l, from) {
-    const part = l.parts[S.part] || l.parts[0];
+    const part = (l.parts || [])[S.part] || (l.parts || [])[0];
     S.play = { lid: l.id, part: S.part };
     PL = { kind: srcKind(part), start: from, acc: 0, adj: 0, lid: l.id, part: S.part };
     render(); toast("start");
@@ -357,6 +357,12 @@
   window.addEventListener("pagehide", () => { if (S.play) savePlay(false); });
 
   function player(l, part) {
+    if (!part || !(part.youtube_id || part.url || part.drive_id)) {
+      return h("div", { class: "video poster" }, h("div", { class: "poster-inner" },
+        h("span", { class: "poster-num" }, AR(String(num(l)).padStart(2, "0"))),
+        h("div", { class: "poster-title" }, "مقطع هذه المحاضرة لم يُضف بعد"),
+        h("div", { class: "small", style: "opacity:.8" }, "سيظهر هنا فور إضافته من لوحة المعلم.")));
+    }
     const playing = S.play && S.play.lid === l.id && S.play.part === S.part;
     if (playing) return h("div", { class: "video" }, h("div", { id: "player-host", class: "player-host" }));
     const saved = posOf(l), dur = ((l.durations || {})[String(S.part)]) || 0;
@@ -387,7 +393,7 @@
   function viewLecture() {
     const l = lecture(S.lid);
     if (!l || l.state === "locked") { S.view = "home"; return viewHome(); }
-    const part = l.parts[S.part] || l.parts[0];
+    const part = (l.parts || [])[S.part] || (l.parts || [])[0];
     const st = settings();
     const sim = l.exam_mode === "generated" && window.EXAMS[l.id];
     const hasQuiz = l.question_count > 0 || !!sim;

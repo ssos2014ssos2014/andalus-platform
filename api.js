@@ -20,7 +20,7 @@ window.API = (() => {
   };
   const friendly = msg => {
     for (const k in ERRORS) if (String(msg).includes(k)) return ERRORS[k];
-    return "تعذر الاتصال بالخادم. تحقق من الإنترنت ثم أعد المحاولة.";
+    return "تعذر الاتصال بالخادم. تحقق من الإنترنت ثم أعد المحاولة." + (msg ? ` (${String(msg).slice(0, 160)})` : "");
   };
   async function rpc(fn, args) {
     const { data, error } = await sb.rpc(fn, args);

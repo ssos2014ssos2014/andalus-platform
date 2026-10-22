@@ -263,7 +263,7 @@ insert into lectures (id, title, topic, parts) values
 (55, 'المحاضرة 55', '', '[{"label": "المحاضرة", "drive_id": "1XOMKKjO9wDt4aJuL4xqNk5KxAWOkOyUZ"}]'::jsonb),
 (56, 'المحاضرة 56', '', '[{"label": "المحاضرة", "drive_id": "1mcZ2ZZ6Mv05pOkU00zu28WDfTEA0xuNX"}]'::jsonb),
 (57, 'المحاضرة 57', '', '[{"label": "المحاضرة", "drive_id": "1W7ew2CbVcn6OtQrRwSjY6bqRc21zZe-x"}]'::jsonb)
-on conflict (id) do update set parts = excluded.parts;
+on conflict (id) do nothing;
 
 -- =====================================================================
 -- تحديث: ملفات PDF (ملزمة لكل محاضرة + ملفات خاصة بكل طالب)
