@@ -33,7 +33,9 @@
   const nextOf = id => { const c = lectures().find(l => l.id === id); return lectures().find(l => l.id > id && (l.section || "quant") === ((c && c.section) || "quant")); };
   function go(view, extra) {
     if (S.play && (view !== "lecture" || (extra && ((extra.lid && extra.lid !== S.play.lid) || (extra.part != null && extra.part !== S.play.part))))) { savePlay(true); }
+    const opening = view === "lecture" && (S.view !== "lecture" || (extra && extra.lid && extra.lid !== S.lid));
     Object.assign(S, { view, error: "" }, extra || {}); render(); window.scrollTo(0, 0);
+    if (opening && typeof toast === "function") setTimeout(() => toast("start"), 300);
   }
   async function refresh() { S.data = await API.portal(S.nid); }
   async function refresh0(nid, data) { S.nid = nid; S.data = await API.portal(nid) || data; }
@@ -363,22 +365,16 @@
         h("div", { class: "poster-title" }, "مقطع هذه المحاضرة لم يُضف بعد"),
         h("div", { class: "small", style: "opacity:.8" }, "سيظهر هنا فور إضافته من لوحة المعلم.")));
     }
-    const playing = S.play && S.play.lid === l.id && S.play.part === S.part;
-    if (playing) return h("div", { class: "video" }, h("div", { id: "player-host", class: "player-host" }));
-    const saved = posOf(l), dur = ((l.durations || {})[String(S.part)]) || 0;
-    const justEnded = S.ended && S.ended.lid === l.id && S.ended.part === S.part;
-    return h("div", { class: "video poster" },
-      h("div", { class: "poster-inner" },
-        h("span", { class: "poster-num" }, AR(String(num(l)).padStart(2, "0"))),
-        h("div", { class: "poster-title" }, (l.topic || l.title) + (l.parts.length > 1 ? ` · ${part.label}` : "")),
-        justEnded && h("div", { class: "poster-note" }, "✓ أتممت مشاهدة هذا المقطع"),
-        h("button", { class: "play-btn", onclick: () => { S.ended = null; startPlay(l, saved); } },
-          h("span", { class: "tri", "aria-hidden": "true" }), saved ? `تابع المشاهدة من ${tfmt(saved)}` : justEnded ? "إعادة المشاهدة" : "ابدأ المشاهدة"),
-        saved > 0 && dur > 0 && h("div", { class: "poster-prog" }, h("i", { style: `width:${Math.min(100, saved * 100 / dur)}%` })),
-        saved > 0 && h("button", { class: "linkbtn light", onclick: () => { S.ended = null; startPlay(l, 0); } }, "ابدأ من البداية")));
+    // عرض مباشر كما في النسخة الأولى (بدون زر تشغيل وسيط)
+    if (part.youtube_id) return h("div", { class: "video" }, h("iframe", { src: `https://www.youtube-nocookie.com/embed/${encodeURIComponent(part.youtube_id)}?rel=0&modestbranding=1&playsinline=1`,
+      allow: "autoplay; fullscreen; encrypted-media; picture-in-picture", allowfullscreen: true, title: `${l.title} — ${part.label}`, loading: "lazy" }));
+    if (part.url) return h("div", { class: "video" }, h("video", { src: part.url, controls: true, playsinline: true, preload: "metadata", controlslist: "nodownload" }));
+    return h("div", { class: "video" },
+      h("iframe", { src: `https://drive.google.com/file/d/${encodeURIComponent(part.drive_id)}/preview`, allow: "autoplay; fullscreen", allowfullscreen: true, title: `${l.title} — ${part.label}`, loading: "lazy" }),
+      h("div", { class: "drive-shield", "aria-hidden": "true" }));
   }
   function playerBar(l) {
-    if (!(S.play && S.play.lid === l.id && S.play.part === S.part)) return null;
+    return null;
     const exact = PL && PL.kind !== "drive";
     const adj = s => h("button", { class: "btn ghost sm", onclick: () => { PL.adj += s; const el = document.getElementById("live-pos"); if (el) el.textContent = tfmt(curTime()); } },
       (s > 0 ? "+" : "−") + (Math.abs(s) >= 60 ? AR(Math.abs(s) / 60) + " د" : AR(Math.abs(s)) + " ث"));
