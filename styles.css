@@ -501,3 +501,37 @@ tr:last-child td { border-bottom: 0; }
 @media (max-width: 480px) { .stats { grid-template-columns: repeat(2, 1fr); } }
 .kpis { grid-template-columns: repeat(3, 1fr); }
 @media (max-width: 760px) { .kpis { grid-template-columns: repeat(2, 1fr); } }
+
+/* رسوم القسمين */
+.sec-art { position: absolute !important; inset-block: 0; inset-inline-end: -10px; width: 62%; max-width: 380px; pointer-events: none; display: block; }
+.sec-art svg { width: 100%; height: 100%; }
+.sec-card:hover .sec-art { transform: scale(1.04); transition: transform .4s ease; }
+.sec-icon { color: #2a1c05; }
+.sec-icon svg { width: 62%; height: 62%; }
+.soon-box .sec-icon { color: #2a1c05; }
+.sec-title { display: flex; align-items: center; gap: 12px; }
+.sec-icon.sm { width: 46px; height: 46px; border-radius: 13px; flex: none; }
+
+/* ================= الأسس العربية والشرح المفصل ================= */
+sup.ex { font-size: .68em; vertical-align: .6em; line-height: 0; margin-inline-start: 1px; }
+.rv-q { font-weight: 700; font-size: 1.08rem; white-space: pre-wrap; margin: 4px 0 10px; }
+.rv-ans { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.rv-ans > div { display: flex; align-items: center; gap: 8px; border-radius: 10px; padding: 8px 12px; flex-wrap: wrap; }
+.rv-ans span { font-size: .8rem; opacity: .85; }
+.rv-ans strong { font-size: 1.05rem; }
+.rv-ans em { margin-inline-start: auto; font-style: normal; font-weight: 800; }
+.rv-bad { background: var(--warn-soft); color: var(--warn); }
+.rv-good { background: var(--ok-soft); color: var(--ok); }
+@media (max-width: 560px) { .rv-ans { grid-template-columns: 1fr; } }
+.rv-steps { margin-top: 12px; background: var(--paper); border: 1px solid var(--line); border-radius: 12px; padding: 12px 16px; }
+.rv-steps h4 { margin: 0 0 6px; font-size: .95rem; color: var(--tile-deep); }
+.rv-steps ol { margin: 0; padding-inline-start: 20px; display: grid; gap: 6px; }
+.rv-steps li { line-height: 1.9; }
+.rv-steps li::marker { color: var(--saffron); font-weight: 800; }
+.review .rv-steps li { border: 0; border-radius: 0; padding: 0; background: none; box-shadow: none; border-inline-start: 0; }
+.rv-steps ol { list-style: arabic-indic; }
+.table-wrap td.chip-pass, .table-wrap td.chip-fail { white-space: nowrap; }
+.sec-art { width: 48%; opacity: .75; -webkit-mask-image: linear-gradient(to right, #000 50%, transparent 100%); mask-image: linear-gradient(to right, #000 50%, transparent 100%); }
+.sec-name, .sec-desc, .sec-meta, .sec-bar, .sec-go, .sec-icon { z-index: 1; }
+.sec-desc { max-width: 62%; }
+@media (max-width: 640px) { .sec-art { width: 70%; opacity: .45; } .sec-desc { max-width: 100%; } }

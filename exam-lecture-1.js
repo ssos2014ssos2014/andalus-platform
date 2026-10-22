@@ -28,7 +28,7 @@
           : style === "x" ? `إذا كان س − ${h.fx(b)} = ${h.fx(a)} ، فما قيمة س ؟`
           : `اشترى ${name} كتابًا بـ ${h.fx(a)} ريال وقلمًا بـ ${h.fx(b)} ريال، فكم دفع؟`;
         return { style, sig: `${style}:${h.str(a)}+${h.str(b)}`, body, ...h.numOptions(R, sum, [mis, h.add(sum, h.d("0.1")), h.shift(sum, -1)]),
-          explanation: `${R1} ${h.pad(a, Math.max(a.s, b.s))} + ${h.pad(b, Math.max(a.s, b.s))} = ${h.fx(sum)}` };
+          steps: [...(style === "x" ? ["نجعل س وحدها في طرف: س = " + h.fx(a) + " + " + h.fx(b)] : []), ...h.colSteps([a, b])], explanation: `${R1} ${h.pad(a, Math.max(a.s, b.s))} + ${h.pad(b, Math.max(a.s, b.s))} = ${h.fx(sum)}` };
       } },
       // ---------------------------------------------------------------
       series: { title: "جمع متسلسلة المنازل (٧ + ٠,٧ + ٠,٠٧ …)", from: 210, to: 570, gen(R, h) {
@@ -41,7 +41,7 @@
         const naive = h.sub(sum, terms[terms.length - 1]); // نسي حدًّا
         return { style, sig: `${style}:${terms.map(h.str).join("+")}`, body: `ما قيمة المقدار ${terms.map(h.fx).join(" + ")} ؟`,
           ...h.numOptions(R, sum, [naive, h.sub(sum, h.d("0.01")), h.add(sum, h.d("0.1"))]),
-          explanation: `${R1} رتّب الأعداد تحت بعضها خانة خانة واجمع كل خانة مع الحمل: الناتج ${h.fx(sum)}. انتبه للحدود المكررة.` };
+          steps: h.colSteps(terms), explanation: `${R1} رتّب الأعداد تحت بعضها خانة خانة واجمع كل خانة مع الحمل: الناتج ${h.fx(sum)}. انتبه للحدود المكررة.` };
       } },
       // ---------------------------------------------------------------
       addsub: { title: "الجمع والطرح معًا (٧,٦٥ + ٧,٣٥ − ٧,٢)", from: 570, to: 750, gen(R, h) {
@@ -54,7 +54,7 @@
           : `مع ${R.pick(NAMES)} ${h.fx(a)} ريال، وأعطاه والده ${h.fx(b)} ريال، ثم اشترى عصيرًا بـ ${h.fx(c)} ريال. كم بقي معه؟`;
         return { style, sig: `${style}:${h.str(a)}+${h.str(b)}-${h.str(c)}`, body,
           ...h.numOptions(R, res, [h.add(a, b, c), h.sub(h.add(a, b), h.shift(c, 1)), h.add(res, h.d(1))]),
-          explanation: `اجمع أولًا: ${h.fx(a)} + ${h.fx(b)} = ${h.fx(h.add(a, b))} (لاحظ أن الكسرين يكملان بعضهما)، ثم اطرح ${h.fx(c)}: الناتج ${h.fx(res)}.` };
+          steps: ["الخطوة ١: نجمع العددين الأولين أولًا، ولاحظ أن جزأيهما العشريين يكملان بعضهما إلى عدد صحيح:", ...h.colSteps([a, b]), "الخطوة ٢: نطرح " + h.fx(c) + " من " + h.fx(h.add(a, b)) + " فيكون الناتج " + h.fx(res) + "."], explanation: `اجمع أولًا: ${h.fx(a)} + ${h.fx(b)} = ${h.fx(h.add(a, b))} (لاحظ أن الكسرين يكملان بعضهما)، ثم اطرح ${h.fx(c)}: الناتج ${h.fx(res)}.` };
       } },
       // ---------------------------------------------------------------
       fromWhole: { title: "طرح عشري من عدد صحيح (قاعدة ٩ و١٠)", from: 750, to: 1080, gen(R, h) {
@@ -67,12 +67,12 @@
         if (style === "cmp") {
           const other = R.pick([res, h.shift(res, 1), h.add(res, { i: 1, s })]);
           return { style, sig: `cmp:${n}-${h.str(x)}:${h.str(other)}`, body: h.cmpBody("", `${h.fx(h.d(n))} − ${h.fx(x)}`, h.fx(other)), ...h.cmpAnswer(res, other),
-            explanation: `${R2} ${h.fx(h.d(n))} − ${h.fx(x)} = ${h.fx(res)}، ثم قارن بعد إكمال الأصفار.` };
+            steps: [...h.nineTen(n, x), "ثم نقارن " + h.fx(res) + " بـ " + h.fx(other) + " بعد إكمال الأصفار حتى يتساوى عدد المنازل."], explanation: `${R2} ${h.fx(h.d(n))} − ${h.fx(x)} = ${h.fx(res)}، ثم قارن بعد إكمال الأصفار.` };
         }
         const body = style === "direct" ? `أوجد قيمة ${h.fx(h.d(n))} − ${h.fx(x)}` : `ما العدد الذي إذا أضيف إلى ${h.fx(x)} كان الناتج ${h.fx(h.d(n))} ؟`;
         const wrong9 = h.sub(h.d(n), h.add(x, { i: 1, s })); // نسي أن الأخير من ١٠
         return { style, sig: `${style}:${n}-${h.str(x)}`, body, ...h.numOptions(R, res, [wrong9, h.add(res, h.d(1)), { i: x.i, s: x.s }].filter(v => !h.eq(v, res))),
-          explanation: `${R2} ${h.fx(h.d(n))} − ${h.fx(x)} = ${h.fx(res)}` };
+          steps: [...(style === "missing" ? ["العدد المطلوب = " + h.fx(h.d(n)) + " − " + h.fx(x) + "، لأن المطلوب + " + h.fx(x) + " = " + h.fx(h.d(n)) + "."] : []), ...h.nineTen(n, x)], explanation: `${R2} ${h.fx(h.d(n))} − ${h.fx(x)} = ${h.fx(res)}` };
       } },
       // ---------------------------------------------------------------
       multiSub: { title: "طرح عدة عشريات من صحيح (اجمع المتشابه أولًا)", from: 1080, to: 1380, gen(R, h) {
@@ -83,7 +83,7 @@
         const body = style === "direct" ? `ما قيمة ${h.ar(String(n))} − ${terms.map(h.fx).join(" − ")} ؟`
           : `خزان فيه ${h.ar(String(n))} لترات، سُحب منه ${terms.map(h.fx).join(" لتر ثم ")} لتر. كم لترًا بقي؟`;
         return { style, sig: `${style}:${n}-${k}x${m}`, body, ...h.numOptions(R, res, [h.add(h.d(n), tot), h.sub(h.d(n), h.add(tot, { i: 1, s: m })), h.sub(h.d(n - 1), tot)].filter(v => v.i >= 0 && !h.eq(v, res))),
-          explanation: `الإشارات متشابهة (كلها طرح) فنجمع المطروحات أولًا: ${terms.map(h.fx).join(" + ")} = ${h.fx(tot)}، ثم ${h.ar(String(n))} − ${h.fx(tot)} = ${h.fx(res)} بقاعدة ٩ و١٠.` };
+          steps: ["الإشارات كلها سالبة (متشابهة)، فنجمع المطروحات أولًا كما في المحاضرة:", ...h.colSteps(terms), "ثم نطرح المجموع من " + h.A(n) + " بقاعدة ٩ و١٠:", ...h.nineTen(n, tot)], explanation: `الإشارات متشابهة (كلها طرح) فنجمع المطروحات أولًا: ${terms.map(h.fx).join(" + ")} = ${h.fx(tot)}، ثم ${h.ar(String(n))} − ${h.fx(tot)} = ${h.fx(res)} بقاعدة ٩ و١٠.` };
       } },
       // ---------------------------------------------------------------
       mult: { title: "ضرب الأعداد العشرية (عدّ المنازل)", from: 1380, to: 1500, extra: [[1710, 1800], [2280, 2370]], gen(R, h) {
@@ -100,7 +100,7 @@
           : `ما قيمة ${fs.map(h.fx).join(" × ")} ؟`;
         if ((style === "price" || style === "area") && (fs[0].i === 0 || fs[1].i === 0)) return null;
         return { style, sig: `${style}:${fs.map(h.str).join("x")}`, body, ...h.numOptions(R, prod, [h.shift(prod, 1), h.shift(prod, -1), h.shift(prod, 2)]),
-          explanation: `${R3} حاصل ضرب الأرقام بدون فواصل ${h.ar(String(Math.abs(fs.reduce((t, f) => t * f.i, 1))))}، وعدد المنازل ${h.ar(String(places))}، فالناتج ${h.fx(prod)}.` };
+          steps: [...(style === "price" ? ["السعر الكلي = سعر الكيلو × عدد الكيلوات."] : style === "area" ? ["مساحة المستطيل = الطول × العرض."] : []), ...h.multSteps(fs)], explanation: `${R3} حاصل ضرب الأرقام بدون فواصل ${h.ar(String(Math.abs(fs.reduce((t, f) => t * f.i, 1))))}، وعدد المنازل ${h.ar(String(places))}، فالناتج ${h.fx(prod)}.` };
       } },
       // ---------------------------------------------------------------
       powers: { title: "قوى الأعداد العشرية ((٠,٢)³ و ٠,١ + ٠,١² …)", from: 1500, to: 1830, extra: [[2550, 2730]], gen(R, h) {
@@ -110,21 +110,21 @@
           const a = { i: R.int(1, 9), s: 1 }, c = { i: R.int(1, 9), s: R.pick([1, 2]) };
           const v = h.add(h.mul(a, a), h.mul(c, c));
           return { style, sig: `sq:${h.str(a)}:${h.str(c)}`, body: `ما قيمة ${h.fx(a)}² + ${h.fx(c)}² ؟`, ...h.numOptions(R, v, [h.mul(h.add(a, c), h.d(2)), h.shift(v, -1), h.mul(h.add(a, c), h.add(a, c))]),
-            explanation: `${h.fx(a)}² = ${h.fx(h.mul(a, a))} و ${h.fx(c)}² = ${h.fx(h.mul(c, c))} (اضرب ثم عُدّ المنازل)، والمجموع ${h.fx(v)}.` };
+            steps: ["نحسب كل مربع على حدة بقاعدة ضرب العشرية:", ...h.multSteps([a, a]), ...h.multSteps([c, c]), "ثم نجمع الناتجين بمحاذاة الفواصل:", ...h.colSteps([h.mul(a, a), h.mul(c, c)])], explanation: `${h.fx(a)}² = ${h.fx(h.mul(a, a))} و ${h.fx(c)}² = ${h.fx(h.mul(c, c))} (اضرب ثم عُدّ المنازل)، والمجموع ${h.fx(v)}.` };
         }
         if (style === "pow") {
           const b = { i: R.int(1, 9), s: R.pick([1, 1, 2]) }, e = b.s === 2 || b.i > 5 ? 2 : R.int(2, 4);
           if (b.i ** e > 999) return null;
           const v = h.mul(...Array(e).fill(b));
           return { style, sig: `pow:${h.str(b)}^${e}`, body: `ما قيمة (${h.fx(b)})${sup[e]} ؟`, ...h.numOptions(R, v, [h.shift(v, -1), h.shift(v, 1), h.mul(b, h.d(e))]),
-            explanation: `(${h.fx(b)})${sup[e]} تعني ضرب ${h.fx(b)} في نفسها ${h.ar(String(e))} مرات: ${h.ar(String(b.i ** e))} مع ${h.ar(String(b.s * e))} منازل عشرية، فالناتج ${h.fx(v)}.` };
+            steps: ["(" + h.fx(b) + ")" + sup[e] + " تعني ضرب " + h.fx(b) + " في نفسه " + h.A(e) + " مرات: " + Array(e).fill(h.fx(b)).join(" × ") + ".", ...h.multSteps(Array(e).fill(b))], explanation: `(${h.fx(b)})${sup[e]} تعني ضرب ${h.fx(b)} في نفسها ${h.ar(String(e))} مرات: ${h.ar(String(b.i ** e))} مع ${h.ar(String(b.s * e))} منازل عشرية، فالناتج ${h.fx(v)}.` };
         }
         const b = { i: R.pick([1, 1, 2, 3, 4, 5]), s: 1 }, m = R.int(2, 4);
         const parts = Array.from({ length: m }, (_, k) => h.mul(...Array(k + 1).fill(b)));
         const v = h.add(...parts);
         return { style, sig: `sum:${h.str(b)}:${m}`, body: `ما قيمة المقدار ${parts.map((_, k) => h.fx(b) + sup[k + 1]).join(" + ")} ؟`,
           ...h.numOptions(R, v, [h.mul(b, h.d(m)), h.shift(v, 1), h.sub(v, parts[0])]),
-          explanation: `احسب كل قوة: ${parts.map(h.fx).join(" ، ")}، ثم اجمع مع ترتيب الفواصل: الناتج ${h.fx(v)}.` };
+          steps: ["نحسب كل قوة على حدة: عدد المنازل العشرية في الناتج = الأس × منازل الأساس.", ...parts.map((p2, k) => h.fx(b) + sup[k + 1] + " = " + h.fx(p2)), "ثم نجمعها بمحاذاة الفواصل:", ...h.colSteps(parts)], explanation: `احسب كل قوة: ${parts.map(h.fx).join(" ، ")}، ثم اجمع مع ترتيب الفواصل: الناتج ${h.fx(v)}.` };
       } },
       // ---------------------------------------------------------------
       cmpPad: { title: "المقارنة بإكمال الأصفار", from: 1830, to: 1950, extra: [[2070, 2190]], gen(R, h) {
@@ -136,7 +136,7 @@
         if (R.next() < .5) [a, b] = [b, a];
         const show = style === "zero" ? [h.fx(a), h.pad(b, b.s + R.int(1, 2))] : [h.fx(a), h.fx(b)];
         return { style, sig: `${style}:${show.join("|")}`, body: h.cmpBody("", show[0], show[1]), ...h.cmpAnswer(a, b),
-          explanation: `أكمل الخانات بأصفار حتى يتساوى عدد الأرقام بعد الفاصلة: ${h.pad(a, 3)} و ${h.pad(b, 3)}، ثم قارن كعددين صحيحين. الأصفار في آخر الجزء العشري لا تغيّر القيمة.` };
+          steps: ["نكمل الخانات بأصفار حتى يتساوى عدد الأرقام بعد الفاصلة: " + h.pad(a, 3) + " و " + h.pad(b, 3) + ".", "نقارن خانة خانة من بعد الفاصلة: الأجزاء من عشرة، ثم من مئة، ثم من ألف. أول خانة يختلف فيها العددان تحدد الأكبر.", "الأصفار في آخر الجزء العشري لا تغيّر القيمة، وطول العدد لا يعني أنه أكبر.", (h.cmp(a, b) > 0 ? "إذن القيمة الأولى أكبر." : h.cmp(a, b) < 0 ? "إذن القيمة الثانية أكبر." : "إذن القيمتان متساويتان.")], explanation: `أكمل الخانات بأصفار حتى يتساوى عدد الأرقام بعد الفاصلة: ${h.pad(a, 3)} و ${h.pad(b, 3)}، ثم قارن كعددين صحيحين. الأصفار في آخر الجزء العشري لا تغيّر القيمة.` };
       } },
       // ---------------------------------------------------------------
       cmpProduct: { title: "المقارنة بعد ضرب العشرية", from: 1950, to: 2190, gen(R, h) {
@@ -145,7 +145,7 @@
         if (p.i === 0) return null;
         const other = R.pick([p, h.shift(p, 1), h.shift(p, -1)]);
         return { style: "cmp", sig: `${fs.map(h.str).join("x")}:${h.str(other)}`, body: h.cmpBody("", fs.map(h.fx).join(" × "), h.fx(other)), ...h.cmpAnswer(p, other),
-          explanation: `${R3} القيمة الأولى = ${h.fx(p)}. أكمل الأصفار ثم قارن بـ ${h.fx(other)}.` };
+          steps: ["نحسب القيمة الأولى بقاعدة ضرب العشرية:", ...h.multSteps(fs), "ثم نقارن " + h.fx(p) + " بـ " + h.fx(other) + " بعد إكمال الأصفار: " + (h.cmp(p, other) > 0 ? "القيمة الأولى أكبر." : h.cmp(p, other) < 0 ? "القيمة الثانية أكبر." : "القيمتان متساويتان.")], explanation: `${R3} القيمة الأولى = ${h.fx(p)}. أكمل الأصفار ثم قارن بـ ${h.fx(other)}.` };
       } },
       // ---------------------------------------------------------------
       square5: { title: "تربيع العدد الذي آحاده ٥ (١,٥ × ١,٥)", from: 2190, to: 2280, gen(R, h) {
@@ -155,15 +155,15 @@
         const style = R.pick(["direct", "cmp"]) + (form === "0.n5" ? "s" : "");
         if (form === "0.n5") {
           return { style, sig: `s:${n}`, body: `ما قيمة (${h.fx(x)})² ؟`, ...h.numOptions(R, sq, [h.shift(sq, -1), h.d(`0.${n * (n + 1)}5`), h.shift(sq, 1)]),
-            explanation: `${h.ar(String(n))} × ${h.ar(String(n + 1))} = ${h.ar(String(n * (n + 1)))} ثم نكتب ٢٥ بعدها: ${h.ar(String(n * (n + 1)))}٢٥، وعدد المنازل ٤، فالناتج ${h.fx(sq)}.` };
+            steps: ["الرقم قبل الخمسة هو " + h.A(n) + "، نضربه في التالي له: " + h.A(n) + " × " + h.A(n + 1) + " = " + h.A(n * (n + 1)) + ".", "نكتب ٢٥ بعده فيصبح " + h.A(n * (n + 1)) + "٢٥.", "عدد المنازل = ٢ + ٢ = ٤، فالناتج " + h.fx(sq) + "."], explanation: `${h.ar(String(n))} × ${h.ar(String(n + 1))} = ${h.ar(String(n * (n + 1)))} ثم نكتب ٢٥ بعدها: ${h.ar(String(n * (n + 1)))}٢٥، وعدد المنازل ٤، فالناتج ${h.fx(sq)}.` };
         }
         if (style === "cmp") {
           const other = R.pick([h.d(n * (n + 1)), h.d(`${n * (n + 1)}.5`), sq]);
           return { style, sig: `cmp:${n}:${h.str(other)}`, body: h.cmpBody("", `${h.fx(x)} × ${h.fx(x)}`, h.fx(other)), ...h.cmpAnswer(sq, other),
-            explanation: `العدد الذي آحاده ٥: اضرب الرقم في التالي له ثم أضف ٢٥: ${h.ar(String(n))} × ${h.ar(String(n + 1))} = ${h.ar(String(n * (n + 1)))}، فالمربع ${h.fx(sq)}.` };
+            steps: ["حيلة المحاضرة لتربيع العدد الذي آحاده ٥: اضرب الرقم في التالي له ثم اكتب ٢٥ بعده.", h.A(n) + " × " + h.A(n + 1) + " = " + h.A(n * (n + 1)) + "، فيكون " + h.fx(x) + " × " + h.fx(x) + " = " + h.fx(sq) + ".", "ثم نقارن " + h.fx(sq) + " بـ " + h.fx(other) + "."], explanation: `العدد الذي آحاده ٥: اضرب الرقم في التالي له ثم أضف ٢٥: ${h.ar(String(n))} × ${h.ar(String(n + 1))} = ${h.ar(String(n * (n + 1)))}، فالمربع ${h.fx(sq)}.` };
         }
         return { style, sig: `d:${n}`, body: `ما قيمة (${h.fx(x)})² ؟`, ...h.numOptions(R, sq, [h.d(n * n + 0.25), h.d(`${n * (n + 1)}.5`), h.shift(sq, 1)]),
-          explanation: `اضرب ${h.ar(String(n))} في التالي له ${h.ar(String(n + 1))} = ${h.ar(String(n * (n + 1)))}، ثم أضف ٢٥ في المنزلتين العشريتين: ${h.fx(sq)}.` };
+          steps: ["حيلة المحاضرة: اضرب الرقم في التالي له ثم اكتب ٢٥ بعده.", h.A(n) + " × " + h.A(n + 1) + " = " + h.A(n * (n + 1)) + ".", "منزلتان عشريتان (١ + ١)، فالناتج " + h.fx(sq) + "."], explanation: `اضرب ${h.ar(String(n))} في التالي له ${h.ar(String(n + 1))} = ${h.ar(String(n * (n + 1)))}، ثم أضف ٢٥ في المنزلتين العشريتين: ${h.fx(sq)}.` };
       } },
       // ---------------------------------------------------------------
       bill: { title: "مسألة الفاتورة اليومية (٧,٥ = ١٥ ÷ ٢)", from: 2370, to: 2550, gen(R, h) {
@@ -174,10 +174,10 @@
         if (style === "cmp") {
           const other = h.add(total, h.d(R.pick([-10, -5, 5, 10, 15, 0])));
           return { style, sig: `cmp:${h.str(p)}:${days}:${h.str(other)}`, body: h.cmpBody(`فاتورة ${kind} قيمتها في اليوم ${h.fx(p)} ريال.`, `قيمة الفاتورة بعد ${h.ar(String(days))} يومًا`, `${h.fx(other)} ريال`), ...h.cmpAnswer(total, other),
-            explanation: `${half} ريال، ثم قارن بـ ${h.fx(other)}.` };
+            steps: ["قيمة الفاتورة = القيمة اليومية × عدد الأيام = " + h.fx(p) + " × " + h.A(days) + ".", "حيلة المحاضرة: " + h.fx(p) + " = " + h.A(p.i) + " ÷ ٢، فنقسم الأيام على ٢ أولًا: " + h.A(days) + " ÷ ٢ = " + h.A(days / 2) + ".", h.A(days / 2) + " × " + h.A(p.i) + " = " + h.fx(total) + " ريال.", "ثم نقارن بـ " + h.fx(other) + " ريال."], explanation: `${half} ريال، ثم قارن بـ ${h.fx(other)}.` };
         }
         return { style, sig: `d:${h.str(p)}:${days}`, body: `فاتورة ${kind} قيمتها في اليوم ${h.fx(p)} ريال، فكم قيمتها بعد ${h.ar(String(days))} يومًا؟`,
-          ...h.numOptions(R, total, [h.mul(h.d(p.i), h.d(days)), h.add(total, p), h.sub(total, p)]), explanation: `${half} ريال.` };
+          ...h.numOptions(R, total, [h.mul(h.d(p.i), h.d(days)), h.add(total, p), h.sub(total, p)]), steps: ["قيمة الفاتورة = القيمة اليومية × عدد الأيام = " + h.fx(p) + " × " + h.A(days) + ".", "حيلة المحاضرة: " + h.fx(p) + " = " + h.A(p.i) + " ÷ ٢، فنقسم الأيام على ٢ أولًا: " + h.A(days) + " ÷ ٢ = " + h.A(days / 2) + ".", h.A(days / 2) + " × " + h.A(p.i) + " = " + h.fx(total) + " ريال."], explanation: `${half} ريال.` };
       } },
       // ---------------------------------------------------------------
       daily: { title: "مسألة الزيادة اليومية (الجري)", from: 2730, to: 2820, gen(R, h) {
@@ -187,7 +187,7 @@
         const name = R.pick(NAMES), act = R.pick(["الجري", "المشي", "ركوب الدراجة"]);
         return { style: "d", sig: `${h.str(s)}:${h.str(inc)}:${i0}-${i1}`, body: `يمارس ${name} رياضة ${act}، إذا قطع يوم ${DAYS[i0]} ${h.fx(s)} كلم ويزيد كل يوم بمقدار ${h.fx(inc)} كلم، فكم يقطع يوم ${DAYS[i1]}؟`,
           ...h.numOptions(R, v, [h.add(s, h.mul(inc, h.d(steps + 1))), h.add(s, h.mul(inc, h.d(steps - 1))), h.add(s, inc)]),
-          explanation: `عدد الزيادات من ${DAYS[i0]} إلى ${DAYS[i1]} = ${h.ar(String(steps))} (لا تحسب يوم البداية). المسافة = ${h.fx(s)} + ${h.ar(String(steps))} × ${h.fx(inc)} = ${h.fx(v)} كلم.` };
+          steps: ["عدد الزيادات = عدد الأيام بعد يوم البداية: من " + DAYS[i0] + " إلى " + DAYS[i1] + " = " + h.A(steps) + " أيام، ولا نحسب يوم " + DAYS[i0] + " نفسه.", "الزيادة الكلية = " + h.A(steps) + " × " + h.fx(inc) + " = " + h.fx(h.mul(inc, h.d(steps))) + " كلم.", "المسافة يوم " + DAYS[i1] + " = " + h.fx(s) + " + " + h.fx(h.mul(inc, h.d(steps))) + " = " + h.fx(v) + " كلم."], explanation: `عدد الزيادات من ${DAYS[i0]} إلى ${DAYS[i1]} = ${h.ar(String(steps))} (لا تحسب يوم البداية). المسافة = ${h.fx(s)} + ${h.ar(String(steps))} × ${h.fx(inc)} = ${h.fx(v)} كلم.` };
       } },
       // ---------------------------------------------------------------
       container: { title: "مسألة العلبة الفارغة (جزء من المحتوى)", from: 2820, to: 3104, gen(R, h) {
@@ -200,7 +200,7 @@
         return { style, sig: `${style}:${h.str(can)}:${h.str(unit)}:${fr[1]}/${fr[0]}`,
           body: `وزن ${kind[0]} وهي ممتلئة ${h.fx(full)} كجم، وبعد ${kind[1]} ${fr[2]} محتواها أصبح وزنها ${h.fx(after)} كجم، فما وزن ${style === "can" ? kind[2] + " فارغة" : "المحتوى كاملًا"}؟`,
           ...h.numOptions(R, ans, [style === "can" ? food : can, h.sub(full, after), unit, after].filter(v => !h.eq(v, ans))),
-          explanation: `ارسم العلبة مقسومة إلى ${h.ar(String(fr[1]))} أجزاء. المأخوذ = ${h.fx(full)} − ${h.fx(after)} = ${h.fx(h.sub(full, after))} كجم، وهو ${h.ar(String(fr[0]))} من ${h.ar(String(fr[1]))} أجزاء، فالجزء الواحد ${h.fx(unit)} والمحتوى كله ${h.fx(food)} كجم، ووزن ${kind[2]} فارغة ${h.fx(full)} − ${h.fx(food)} = ${h.fx(can)} كجم.` };
+          steps: ["نرسم " + kind[2] + " ونقسم محتواها إلى " + h.A(fr[1]) + " أجزاء متساوية كما في المحاضرة.", "المأخوذ = الوزن قبل − الوزن بعد = " + h.fx(full) + " − " + h.fx(after) + " = " + h.fx(h.sub(full, after)) + " كجم.", "هذا المأخوذ يساوي " + h.A(fr[0]) + " من الأجزاء، فالجزء الواحد = " + h.fx(h.sub(full, after)) + " ÷ " + h.A(fr[0]) + " = " + h.fx(unit) + " كجم.", "المحتوى كاملًا = " + h.A(fr[1]) + " × " + h.fx(unit) + " = " + h.fx(food) + " كجم.", "وزن " + kind[2] + " فارغة = " + h.fx(full) + " − " + h.fx(food) + " = " + h.fx(can) + " كجم."], explanation: `ارسم العلبة مقسومة إلى ${h.ar(String(fr[1]))} أجزاء. المأخوذ = ${h.fx(full)} − ${h.fx(after)} = ${h.fx(h.sub(full, after))} كجم، وهو ${h.ar(String(fr[0]))} من ${h.ar(String(fr[1]))} أجزاء، فالجزء الواحد ${h.fx(unit)} والمحتوى كله ${h.fx(food)} كجم، ووزن ${kind[2]} فارغة ${h.fx(full)} − ${h.fx(food)} = ${h.fx(can)} كجم.` };
       } }
     }
   };

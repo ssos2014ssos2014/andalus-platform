@@ -94,6 +94,30 @@
     quant: { name: "القسم الكمي", icon: "∑", desc: "الحساب والجبر والهندسة والإحصاء وحل المسائل", tone: "q" },
     verbal: { name: "القسم اللفظي", icon: "ض", desc: "التناظر اللفظي وإكمال الجمل والخطأ السياقي واستيعاب المقروء", tone: "v" }
   };
+  // رسوم القسمين: إيحاءات بصرية بدل الحروف
+  const SEC_ICON = {
+    quant: '<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 40V8"/><path d="M8 40h32"/><path d="M13 33l8-9 6 5 11-14"/><circle cx="38" cy="15" r="2.4" fill="currentColor"/><path d="M30 37h8M34 33v8" stroke-width="2.2"/></svg>',
+    verbal: '<svg viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M24 13c-4-3-10-4-16-3v26c6-1 12 0 16 3 4-3 10-4 16-3V10c-6-1-12 0-16 3z"/><path d="M24 13v26"/><path d="M12 18h7M12 23h7M29 18h7M29 23h7M29 28h5"/></svg>'
+  };
+  const SEC_ART = {
+    quant: `<svg viewBox="0 0 320 220" fill="none" stroke="#fff" stroke-linecap="round" stroke-linejoin="round">
+      <g opacity=".16" stroke-width="1"><path d="M20 200h280M20 160h280M20 120h280M20 80h280M60 20v190M120 20v190M180 20v190M240 20v190"/></g>
+      <g opacity=".45" stroke-width="3"><path d="M30 190 C 90 180, 120 120, 170 110 S 250 50, 300 30"/></g>
+      <g opacity=".5" fill="#f3d08b" stroke="none"><circle cx="170" cy="110" r="5"/><circle cx="300" cy="30" r="5"/><circle cx="90" cy="170" r="4"/></g>
+      <g opacity=".38" stroke-width="2.4"><path d="M210 200 L270 200 L210 140 Z"/><path d="M222 200 a12 12 0 0 0 -12 -12"/></g>
+      <g opacity=".32" stroke-width="2.4"><circle cx="72" cy="62" r="30"/><path d="M72 62 V32 A30 30 0 0 1 98 77 Z" fill="#f3d08b" fill-opacity=".35"/></g>
+      <g opacity=".55" stroke="#f3d08b" stroke-width="3.2"><path d="M140 40h18M149 31v18"/><path d="M250 120l12 12M262 120l-12 12"/><path d="M120 190h16M120 182h16"/><circle cx="196" cy="58" r="2.4" fill="#f3d08b"/><path d="M186 66h20"/><circle cx="196" cy="74" r="2.4" fill="#f3d08b"/></g>
+    </svg>`,
+    verbal: `<svg viewBox="0 0 320 220" fill="none" stroke="#fff" stroke-linecap="round" stroke-linejoin="round">
+      <g opacity=".42" stroke-width="2.6"><path d="M160 70c-22-14-56-18-90-12v118c34-6 68-2 90 12 22-14 56-18 90-12V58c-34-6-68-2-90 12z"/><path d="M160 70v118"/></g>
+      <g opacity=".3" stroke-width="2"><path d="M86 86h52M86 102h52M86 118h44M86 134h52M86 150h36M182 86h52M182 102h44M182 118h52M182 134h40M182 150h52"/></g>
+      <g opacity=".55" stroke="#f3d08b" stroke-width="3"><path d="M40 58c18-30 60-34 74-6"/><path d="M206 52c22-26 64-22 76 8"/><path d="M28 196c40-18 90-10 130 4s96 10 136-8"/></g>
+      <g opacity=".5" fill="#f3d08b" stroke="none"><path d="M258 120c-8 0-13 6-13 13 0 6 5 11 11 11 1 6-3 11-9 14l2 4c11-4 19-13 19-25 0-10-4-17-10-17z"/><path d="M286 120c-8 0-13 6-13 13 0 6 5 11 11 11 1 6-3 11-9 14l2 4c11-4 19-13 19-25 0-10-4-17-10-17z"/></g>
+      <g opacity=".4" stroke-width="2.4"><rect x="22" y="104" width="44" height="30" rx="10"/><path d="M34 134l-6 10 14-10"/></g>
+    </svg>`
+  };
+  const svgSpan = (cls, html) => { const e = h("span", { class: cls, "aria-hidden": "true" }); e.innerHTML = html; return e; };
+
   const num = l => l.section === "verbal" && l.id > 1000 ? l.id - 1000 : l.id;
   const secOf = l => l.section || "quant";
   const tile = (label, value, sub) => h("div", { class: "stat" }, h("div", { class: "v" }, value), h("div", { class: "k" }, label), sub && h("div", { class: "s" }, sub));
@@ -108,7 +132,8 @@
       const sec = SECTIONS[key], ls = all.filter(l => secOf(l) === key), done = ls.filter(l => l.done).length;
       const p = ls.length ? Math.round(done * 100 / ls.length) : 0;
       return h("button", { class: "sec-card " + sec.tone, onclick: () => go("section", { section: key, filter: "all" }) },
-        h("span", { class: "sec-icon", "aria-hidden": "true" }, sec.icon),
+        svgSpan("sec-art", SEC_ART[key]),
+        svgSpan("sec-icon", SEC_ICON[key]),
         h("span", { class: "sec-name" }, sec.name),
         h("span", { class: "sec-desc" }, sec.desc),
         ls.length ? [h("span", { class: "sec-meta" }, `${AR(ls.length)} محاضرة · أكملت ${AR(done)}`),
@@ -183,7 +208,7 @@
       h("section", { class: "hero " + sec.tone },
         h("div", { class: "hero-text" },
           h("p", { class: "eyebrow" }, settings().platform_name),
-          h("h1", null, sec.icon + "  " + sec.name),
+          h("h1", { class: "sec-title" }, svgSpan("sec-icon sm", SEC_ICON[key]), sec.name),
           h("p", null, ls.length ? (doneCount ? `أكملت ${AR(doneCount)} من ${AR(ls.length)} محاضرة. واصل، أنت على الطريق الصحيح.` : "ابدأ من المحاضرة الأولى، وتقدّم خطوة بخطوة.") : "مقاطع هذا القسم تُضاف قريبًا بإذن الله."),
           ls.length > 0 && h("div", { class: "progress" },
             h("div", { class: "bar", role: "progressbar", "aria-valuemin": "0", "aria-valuemax": String(ls.length), "aria-valuenow": String(doneCount) },
@@ -210,7 +235,7 @@
                 h("div", { class: "bar" }, h("i", { style: `width:${g.filter(x => x.done).length * 100 / g.length}%` })))),
             h("ul", { class: "lgrid" }, g.map(card))))
             : h("p", { class: "muted" }, f === "done" ? "لم تكمل أي محاضرة بعد." : "لا توجد محاضرات في هذا التصنيف.")]
-          : h("div", { class: "soon-box" }, h("span", { class: "sec-icon big", "aria-hidden": "true" }, sec.icon),
+          : h("div", { class: "soon-box" }, svgSpan("sec-icon big", SEC_ICON[key]),
               h("h2", null, "قريبًا بإذن الله"), h("p", { class: "muted" }, "سيُضاف محتوى هذا القسم بنفس أسلوب القسم الكمي: مقاطع مرتبة، واختبارات محاكية بعد كل محاضرة.")))) ];
   }
 
@@ -521,7 +546,7 @@
       S.error && h("div", { class: "alert err", role: "alert" }, S.error),
       h("section", { class: "panel" },
         h("div", { class: "small muted", style: "margin-bottom:6px" }, `السؤال ${Q.i + 1} من ${total}`),
-        h("div", { class: "qbody" }, q.body),
+        h("div", { class: "qbody" }, rt(q.body)),
         h("div", { class: "opts", role: "radiogroup" }, opts),
         h("div", { class: "exam-nav" },
           h("button", { class: "btn ghost", disabled: Q.i === 0, onclick: () => { Q.i--; render(); } }, "السابق"),
@@ -581,6 +606,12 @@
   // ---------- الاختبار المحاكي (نمط قياس) ----------
   const SIMKEY = "andalus-sim";
   const ARD = s => String(s).replace(/[0-9]/g, c => "٠١٢٣٤٥٦٧٨٩"[c]);
+  // نص بأرقام عربية، والأسس (² ³ …) تُعرض أسسًا عربية مرفوعة
+  const SUPS = "⁰¹²³⁴⁵⁶⁷⁸⁹";
+  function rt(str) {
+    return String(str ?? "").split(/([⁰¹²³⁴⁵⁶⁷⁸⁹]+)/).filter(Boolean).map(part =>
+      SUPS.includes(part[0]) ? h("sup", { class: "ex" }, [...part].map(c => "٠١٢٣٤٥٦٧٨٩"[SUPS.indexOf(c)]).join("")) : ARD(part));
+  }
   const tfmt = sec => ARD(ExamEngine.fmtTime(Math.max(0, Math.round(sec))));
   const saveSim = () => ss.set(SIMKEY, S.sim ? JSON.stringify(S.sim) : null);
   async function startSim(l) {
@@ -623,7 +654,7 @@
     const pos = nav.indexOf(Q.i);
     const opts = q.options.map((o, k) => h("label", { class: "opt" },
       h("input", { type: "radio", name: "sq", checked: Q.answers[Q.i] === k, onchange: () => { Q.answers[Q.i] = k; saveSim(); render(); } }),
-      h("span", { class: "l" }, LETTERS[k]), h("span", null, o)));
+      h("span", { class: "l" }, LETTERS[k]), h("span", null, rt(o))));
     const answered = Object.keys(Q.answers).length;
     return [band(), h("main", { class: "wrap narrow" },
       simHead(`السؤال ${ARD(Q.i + 1)} من ${ARD(total)}، أجبت عن ${ARD(answered)}`),
@@ -634,7 +665,7 @@
           h("span", { class: "qnum" }, ARD(Q.i + 1)),
           h("button", { class: "btn ghost sm flag" + (Q.flags[Q.i] ? " on" : ""), "aria-pressed": String(!!Q.flags[Q.i]),
             onclick: () => { Q.flags[Q.i] = !Q.flags[Q.i]; saveSim(); render(); } }, Q.flags[Q.i] ? "★ مميز للمراجعة" : "☆ تمييز للمراجعة")),
-        h("div", { class: "qbody" }, q.body),
+        h("div", { class: "qbody" }, rt(q.body)),
         h("div", { class: "opts", role: "radiogroup" }, opts)),
       h("div", { class: "sim-nav" },
         h("button", { class: "btn ghost", disabled: pos <= 0, onclick: () => { Q.i = nav[pos - 1]; saveSim(); render(); } }, "السابق"),
@@ -670,7 +701,7 @@
     if (!timeUp && un && !confirm(`لم تجب عن ${un} سؤالًا وستُحتسب خاطئة. هل تريد إنهاء الاختبار؟`)) return;
     finishing = true;
     const sec = Math.min((Date.now() - Q.started) / 1000, window.EXAMS[Q.lid].minutes * 60);
-    const items = Q.items.map((q, i) => ({ n: i + 1, sig: q.sig, skill: q.skill, body: q.body, options: q.options, correct: q.correct, chosen: Q.answers[i] ?? null, explanation: q.explanation }));
+    const items = Q.items.map((q, i) => ({ n: i + 1, sig: q.sig, skill: q.skill, body: q.body, options: q.options, correct: q.correct, chosen: Q.answers[i] ?? null, explanation: q.explanation, steps: q.steps || null }));
     try {
       const r = await API.submitPractice(S.nid, Q.attempt, items, Math.round(sec));
       clearInterval(simTimer);
@@ -712,7 +743,7 @@
           h("thead", null, h("tr", null, h("th", null, "المهارة"), h("th", null, "الدرجة"), h("th", null, "راجعها في المقطع (دقيقة)"))),
           h("tbody", null, Object.keys(def.skills).filter(k => per[k]).map(k => {
             const p = per[k], sk = def.skills[k];
-            return h("tr", null, h("td", null, sk.title),
+            return h("tr", null, h("td", null, rt(sk.title)),
               h("td", { class: p.ok === p.n ? "chip-pass" : "chip-fail" }, `${ARD(p.ok)} من ${ARD(p.n)}`),
               h("td", { class: "small" }, p.ok === p.n ? "متقنة ✓" : ranges(sk)));
           }))))),
@@ -721,12 +752,15 @@
         h("ol", { class: "review" }, wrong.map(it => {
           const sk = def.skills[it.skill];
           return h("li", { class: "wrong" },
-            h("div", { class: "small muted" }, `السؤال ${ARD(it.n)} · ${sk.title}`),
-            h("div", { style: "font-weight:600;white-space:pre-wrap" }, it.body),
-            h("p", { class: "a" }, "إجابتك: ", it.chosen == null ? "لم تُجب" : it.options[it.chosen], " ✗"),
-            h("p", { class: "a" }, "الإجابة الصحيحة: ", h("strong", null, it.options[it.correct])),
-            h("p", { class: "a muted" }, it.explanation),
-            h("p", { class: "a tip" }, "📍 راجع هذا الجزء في المقطع من الدقيقة ", h("strong", null, ranges(sk))));
+            h("div", { class: "small muted" }, `السؤال ${ARD(it.n)} · `, rt(sk.title)),
+            h("div", { class: "rv-q" }, rt(it.body)),
+            h("div", { class: "rv-ans" },
+              h("div", { class: "rv-bad" }, h("span", null, "إجابتك"), h("strong", null, it.chosen == null ? "لم تُجب" : rt(it.options[it.chosen])), h("em", null, "✗")),
+              h("div", { class: "rv-good" }, h("span", null, "الإجابة الصحيحة"), h("strong", null, rt(it.options[it.correct])), h("em", null, "✓"))),
+            h("div", { class: "rv-steps" },
+              h("h4", null, "📘 طريقة الحل خطوة بخطوة"),
+              h("ol", null, (it.steps && it.steps.length ? it.steps : [it.explanation]).map(t => h("li", null, rt(t))))),
+            h("p", { class: "a tip" }, "📍 راجع شرح هذه الفقرة في المقطع من الدقيقة ", h("strong", null, ranges(sk)), " ثم أعد المحاولة."));
         }))))];
   }
 

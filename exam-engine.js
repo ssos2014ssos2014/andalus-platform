@@ -84,7 +84,54 @@ window.ExamEngine = (() => {
     }
     return R.shuffle(items).map((q, i) => ({ ...q, n: i + 1 }));
   }
-  const H = { d, add, sub, mul, shift, cmp, eq, str, ar, fx, pad, numOptions, cmpAnswer, cmpBody, P };
+  // ---------- خطوات حل مفصلة ----------
+  const PLACE = { 2: "المئات", 1: "العشرات", 0: "الآحاد", "-1": "الأجزاء من عشرة", "-2": "الأجزاء من مئة", "-3": "الأجزاء من ألف", "-4": "الأجزاء من عشرة آلاف", "-5": "الأجزاء من مئة ألف", "-6": "الأجزاء من مليون" };
+  const A = n => ar(String(n));
+  // الجمع العمودي خانة خانة مع الحمل
+  function colSteps(terms) {
+    const s = Math.max(...terms.map(t => t.s));
+    const ints = terms.map(t => up(t, s));
+    const top = Math.max(...ints.map(v => String(Math.abs(v)).length), s + 1);
+    const out = [`نكتب الأعداد تحت بعضها بحيث تكون الفواصل في عمود واحد، ونكمل الخانات الناقصة بأصفار: ${terms.map(t => pad(t, s)).join(" ، ")}.`];
+    let carry = 0;
+    for (let k = 0; k < top; k++) {
+      const e = k - s, ds = ints.map(v => Math.floor(v / P(k)) % 10);
+      if (k >= s && k > 0 && ds.every(x => x === 0) && !carry) continue;
+      if (k === s && ds.every(x => x === 0) && !carry) continue;
+      const tot = ds.reduce((a, b) => a + b, 0) + carry;
+      const name = PLACE[e] || "الخانة " + A(k + 1);
+      out.push(`خانة ${name}: ${ds.map(A).join(" + ")}${carry ? " + " + A(carry) + " (المحمول)" : ""} = ${A(tot)}` + (tot >= 10 ? ` ← نكتب ${A(tot % 10)} ونحمل ${A(Math.floor(tot / 10))}` : ""));
+      carry = Math.floor(tot / 10);
+    }
+    if (carry) out.push(`يبقى محمول ${A(carry)} نكتبه في الخانة التالية.`);
+    out.push(`الناتج: ${fx(add(...terms))}`);
+    return out;
+  }
+  // طرح عشري من عدد صحيح بقاعدة ٩ و١٠
+  function nineTen(n, x) {
+    const s = x.s, digits = String(x.i).padStart(s, "0").split("").map(Number);
+    const res = sub(d(n), x);
+    return [
+      `نكتب ${A(n)} على صورة ${A(n - 1)} + ١ ، ونكتب الواحد بعدد منازل ${fx(x)}: ١ = ${pad(d(1), s).replace(/^١/, "١")}.`,
+      `نطرح كل رقم من ٩ ما عدا الأخير: ${digits.slice(0, -1).map(g => `٩ − ${A(g)} = ${A(9 - g)}`).join(" ، ") || "لا يوجد"}.`,
+      `ونطرح الرقم الأخير من ١٠: ١٠ − ${A(digits[digits.length - 1])} = ${A(10 - digits[digits.length - 1])}.`,
+      `الجزء الصحيح يصبح ${A(n - 1)}، فالناتج ${fx(res)}.`,
+      `للتأكد: ${fx(res)} + ${fx(x)} = ${A(n)} ✓`
+    ];
+  }
+  // ضرب العشرية بخطوتي المحاضرة
+  function multSteps(fs) {
+    const p = mul(...fs), places = fs.reduce((t, f) => t + f.s, 0), raw = fs.reduce((t, f) => t * f.i, 1);
+    const st = [
+      `الخطوة ١ (اضرب بدون فواصل): ${fs.map(f => A(f.i)).join(" × ")} = ${A(raw)}.`,
+      `الخطوة ٢ (عُدّ المنازل): ${fs.map(f => A(f.s)).join(" + ")} = ${places === 1 ? "منزلة واحدة" : places === 2 ? "منزلتان" : A(places) + " منازل"} عشرية.`,
+      `نضع الفاصلة بحيث يكون بعدها ${A(places)} أرقام من اليمين، ونكمل بأصفار من اليسار إن نقصت الأرقام: ${places ? ar(String(raw).padStart(places + 1, "0").replace(new RegExp(`(\\d{${places}})$`), ".$1")).replace(".", ",") : A(raw)}.`
+    ];
+    if (raw % 10 === 0 && places) st.push(`الأصفار في آخر الجزء العشري لا قيمة لها، فالناتج ${fx(p)}.`);
+    else st.push(`الناتج: ${fx(p)}`);
+    return st;
+  }
+  const H = { d, add, sub, mul, shift, cmp, eq, str, ar, fx, pad, numOptions, cmpAnswer, cmpBody, P, colSteps, nineTen, multSteps, A };
   const fmtTime = sec => `${String(Math.floor(sec / 60)).padStart(2, "0")}:${String(sec % 60).padStart(2, "0")}`;
   return { build, H, rng, fmtTime };
 })();
