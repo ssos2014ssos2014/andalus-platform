@@ -125,7 +125,6 @@
       h("div", { class: "sections" }, secCard("quant"), secCard("verbal")),
       h("section", { class: "stats", "aria-label": "إحصاءاتي" },
         tile("مرات الدخول", AR(st.logins || 0)),
-        tile("وقتك في المنصة", dur(st.seconds)),
         tile("الاختبارات", AR(st.tests || 0), `شاهدت ${AR(watched)} محاضرة`),
         tile("أعلى درجة", pct(st.max)),
         tile("أدنى درجة", pct(st.min)),
@@ -241,7 +240,7 @@
   function startPing() {
     clearInterval(pingTimer);
     const sid = ss.get("andalus-sid"); if (!sid || !S.nid) return;
-    pingTimer = setInterval(() => { if (document.visibilityState === "visible" && S.nid) API.ping(sid, S.nid).catch(() => {}); }, 60000);
+    // حساب وقت البقاء أُلغي؛ يُحتسب الدخول فقط
   }
 
   // ---------- الأدعية (إشعارات لمدة ١٠ ثوانٍ لا تغطي المقطع) ----------
@@ -270,6 +269,9 @@
   // في يوتيوب والملف المباشر يُقرأ الوقت الفعلي للمقطع بالثانية، ويُعرف انتهاؤه تلقائيًا.
   let PL = null, saveTimer = null, driveTimer = null;
   const posOf = l => ((l && l.positions) || {})[String(S.part)] || 0;
+  function setLocalPos(lid, part, pos) {
+    const l = (S.data?.lectures || []).find(x => x.id === lid); if (l) l.positions = { ...(l.positions || {}), [String(part)]: pos };
+  }
   const srcKind = part => part.youtube_id ? "yt" : part.url ? "video" : "drive";
   let ytLoading = null;
   function loadYT() {
@@ -366,15 +368,49 @@
         h("div", { class: "small", style: "opacity:.8" }, "سيظهر هنا فور إضافته من لوحة المعلم.")));
     }
     // عرض مباشر كما في النسخة الأولى (بدون زر تشغيل وسيط)
-    if (part.youtube_id) return h("div", { class: "video" }, h("iframe", { src: `https://www.youtube-nocookie.com/embed/${encodeURIComponent(part.youtube_id)}?rel=0&modestbranding=1&playsinline=1`,
+    const bm = S.seek && S.seek.lid === l.id && S.seek.part === S.part ? S.seek.t : posOf(l);
+    if (part.youtube_id) return h("div", { class: "video" }, h("iframe", { src: `https://www.youtube-nocookie.com/embed/${encodeURIComponent(part.youtube_id)}?rel=0&modestbranding=1&playsinline=1${bm ? "&start=" + bm : ""}`,
       allow: "autoplay; fullscreen; encrypted-media; picture-in-picture", allowfullscreen: true, title: `${l.title} — ${part.label}`, loading: "lazy" }));
-    if (part.url) return h("div", { class: "video" }, h("video", { src: part.url, controls: true, playsinline: true, preload: "metadata", controlslist: "nodownload" }));
+    if (part.url) return h("div", { class: "video" }, h("video", { src: part.url + (bm ? "#t=" + bm : ""), controls: true, playsinline: true, preload: "metadata", controlslist: "nodownload" }));
     return h("div", { class: "video" },
-      h("iframe", { src: `https://drive.google.com/file/d/${encodeURIComponent(part.drive_id)}/preview`, allow: "autoplay; fullscreen", allowfullscreen: true, title: `${l.title} — ${part.label}`, loading: "lazy" }),
+      h("iframe", { src: `https://drive.google.com/file/d/${encodeURIComponent(part.drive_id)}/preview${bm ? "?t=" + bm + "s" : ""}`, allow: "autoplay; fullscreen", allowfullscreen: true, title: `${l.title} — ${part.label}`, loading: "lazy" }),
       h("div", { class: "drive-shield", "aria-hidden": "true" }));
   }
   function playerBar(l) {
-    return null;
+    const saved = posOf(l);
+    const mm = h("input", { type: "text", inputmode: "numeric", maxlength: "3", placeholder: "د", "aria-label": "الدقيقة", class: "tm" });
+    const sc = h("input", { type: "text", inputmode: "numeric", maxlength: "2", placeholder: "ث", "aria-label": "الثانية", class: "tm" });
+    if (saved) { mm.value = String(Math.floor(saved / 60)); sc.value = String(saved % 60).padStart(2, "0"); }
+    const label = h("strong", { id: "bm-label" }, saved ? tfmt(saved) : "لم تحفظ بعد");
+    const note = h("span", { class: "small", "aria-live": "polite", style: "color:var(--ok)" });
+    const saveBtn = h("button", { class: "btn", type: "submit" }, "📌 احفظ مكان توقفي");
+    const form = h("form", { class: "bm-form", onsubmit: async e => {
+      e.preventDefault();
+      const m = parseInt(toLatinDigits(mm.value) || "0", 10), x = parseInt(toLatinDigits(sc.value) || "0", 10);
+      if (isNaN(m) || isNaN(x) || x > 59 || m > 600) { note.style.color = "var(--warn)"; note.textContent = "اكتب الدقيقة والثانية كما تظهر في شريط المقطع، مثل ٢٣ : ٤٠"; return; }
+      const t = m * 60 + x; saveBtn.disabled = true;
+      try {
+        await API.savePosition(S.nid, l.id, S.part, t, null);
+        setLocalPos(l.id, S.part, t); S.seek = { lid: l.id, part: S.part, t };
+        label.textContent = tfmt(t); note.style.color = "var(--ok)";
+        note.textContent = `✓ حُفظ. في المرة القادمة يبدأ المقطع من ${tfmt(t)}.`;
+        toast("end");
+      } catch (err) { note.style.color = "var(--warn)"; note.textContent = err.message; }
+      saveBtn.disabled = false;
+    } },
+      h("span", { class: "small muted" }, "وصلت في المقطع إلى"),
+      h("div", { class: "tm-row", dir: "ltr" }, mm, h("span", null, ":"), sc),
+      saveBtn);
+    return h("div", { class: "bmark" },
+      h("div", { class: "bm-saved" },
+        h("span", { class: "small muted" }, "مكان توقفك المحفوظ"), label,
+        saved > 0 && h("div", { class: "row", style: "gap:12px;margin-top:4px" },
+          h("button", { class: "linkbtn", onclick: () => { S.seek = { lid: l.id, part: S.part, t: saved }; render(); } }, "▶ تابع من هنا"),
+          h("button", { class: "linkbtn", onclick: () => { S.seek = { lid: l.id, part: S.part, t: 0 }; render(); } }, "⟲ من البداية"))),
+      form,
+      h("div", { class: "bm-hint small muted" }, "أوقف المقطع، واقرأ الوقت الظاهر في شريطه، ثم اكتبه هنا واضغط «احفظ». عند عودتك يبدأ المقطع من نفس المكان. ", note));
+  }
+  function playerBarOld(l) {
     const exact = PL && PL.kind !== "drive";
     const adj = s => h("button", { class: "btn ghost sm", onclick: () => { PL.adj += s; const el = document.getElementById("live-pos"); if (el) el.textContent = tfmt(curTime()); } },
       (s > 0 ? "+" : "−") + (Math.abs(s) >= 60 ? AR(Math.abs(s) / 60) + " د" : AR(Math.abs(s)) + " ث"));
@@ -438,7 +474,12 @@
       h("div", { class: "steps" },
         h("div", { class: "step " + (l.watched ? "complete" : "active") },
           h("h3", null, "١. مشاهدة المحاضرة"),
-          l.watched ? h("p", { class: "small", style: "margin:0" }, "تمت المشاهدة.")
+          l.watched ? [h("p", { class: "small", style: "margin:0 0 8px" }, "✓ تمت المشاهدة."),
+              h("button", { class: "btn ghost sm", style: "width:100%", onclick: async e => {
+                if (!confirm("إلغاء «تمت المشاهدة» لهذه المحاضرة لتعيد مشاهدتها؟ نتائج اختباراتك السابقة تبقى محفوظة.")) return;
+                e.target.disabled = true;
+                try { await API.unmarkWatched(S.nid, l.id); await refresh(); render(); } catch (err) { S.error = err.message; render(); }
+              } }, "↺ إلغاء «تمت المشاهدة» وإعادة المحاضرة")]
             : [h("p", { class: "small" }, "شاهد المحاضرة كاملة ثم اضغط الزر."), markBtn]),
         h("div", { class: "step " + (l.done && hasQuiz ? "complete" : l.watched ? "active" : "") },
           h("h3", null, "٢. الاختبار"),

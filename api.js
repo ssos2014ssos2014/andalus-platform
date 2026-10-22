@@ -31,6 +31,7 @@ window.API = (() => {
   const liveApi = {
     portal: nid => rpc("student_portal", { p_nid: nid }),
     markWatched: (nid, lid) => rpc("mark_watched", { p_nid: nid, p_lid: lid }),
+    unmarkWatched: (nid, lid) => rpc("unmark_watched", { p_nid: nid, p_lid: lid }),
     startQuiz: (nid, lid) => rpc("start_quiz", { p_nid: nid, p_lid: lid }),
     submitQuiz: (nid, attempt, answers) => rpc("submit_quiz", { p_attempt: attempt, p_nid: nid, p_answers: answers }),
     startPractice: (nid, lid) => rpc("start_practice", { p_nid: nid, p_lid: lid }),
@@ -126,6 +127,7 @@ window.API = (() => {
           done: done(st, nid, l.id), best: mine.length ? Math.max(...mine.map(a => a.percent)) : null, attempts_count: mine.length };
       }) };
     },
+    async unmarkWatched(nid, lid) { const st = load(); st.views = st.views.filter(v => !(v.nid === nid && v.lid === lid)); save(st); return true; },
     async markWatched(nid, lid) {
       await wait(); const st = load();
       if (!unlocked(st, nid, lid)) throw new Error(ERRORS.lecture_locked);

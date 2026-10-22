@@ -120,13 +120,10 @@
         kpi("الطلاب الذين دخلوا", AR(D.active), `${AR(D.students ? Math.round(D.active * 100 / D.students) : 0)}٪ من الطلاب`),
         kpi("دخلوا اليوم", AR(D.today)),
         kpi("إجمالي مرات الدخول", AR(D.logins)),
-        kpi("إجمالي الوقت لجميع الطلاب", dur(D.seconds)),
-        kpi("متوسط وقت الطالب", dur(D.active ? D.seconds / D.active : 0), "للطلاب الذين دخلوا"),
         kpi("إجمالي الاختبارات", AR(D.tests)),
         kpi("متوسط الدرجات", D.avg == null ? "—" : AR(D.avg) + "٪")),
       h("div", { class: "tops" },
         list("الأكثر دخولًا", D.top_logins, r => `${AR(r.logins)} مرة`),
-        list("الأطول بقاءً في المنصة", D.top_time, r => dur(r.seconds)),
         list("الأكثر محاولات للاختبارات", D.top_tests, r => `${AR(r.tests)} اختبار`),
         list("الأعلى درجات", D.top_scores, r => `${AR(r.avg)}٪`, "حسب متوسط درجات الاختبارات"),
         list("الأدنى درجات", D.low_scores, r => `${AR(r.avg)}٪`, "يحتاجون متابعة، راسلهم من زر واتساب"))];
