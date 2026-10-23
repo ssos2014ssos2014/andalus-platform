@@ -721,5 +721,17 @@ begin
 end $$;
 grant execute on function unmark_watched(text, int) to anon, authenticated;
 
+update lectures set exam_mode = 'generated', topic = 'قسمة الأعداد العشرية والضرب والقسمة على قوى العشرة' where id = 2;
+
+-- =====================================================================
+-- تحديث ٧: تفعيل الاختبار المحاكي للمحاضرة 2 وإضافة عنوانها
+-- شغّله مرة واحدة في Supabase → SQL Editor
+-- =====================================================================
+update lectures
+   set exam_mode = 'generated',
+       topic = 'قسمة الأعداد العشرية والضرب والقسمة على قوى العشرة'
+ where id = 2;
+
+
 -- ---------- بريد المعلم (غيّره إلى بريدك ثم شغّل السطر) ----------
 -- insert into admins (email) values ('teacher@example.com') on conflict do nothing;

@@ -22,7 +22,7 @@ window.ExamEngine = (() => {
   }
   const ar = s => String(s).replace(/(\d)\.(\d)/g, "$1,$2").replace(/[0-9]/g, c => "٠١٢٣٤٥٦٧٨٩"[c]);
   const fx = x => ar(str(x)); // للعرض
-  const pad = (x, s) => { const t = str(x); const [a, b = ""] = t.split("."); return ar(a + "." + b.padEnd(s, "0")); };
+  const pad = (x, s) => { if (!s) return fx(x); const t = str(x); const [a, b = ""] = t.split("."); return ar(a + "." + b.padEnd(s, "0")); };
 
   // ---------- مولّد أرقام عشوائي قابل للتكرار ----------
   function rng(seed) {
@@ -131,7 +131,26 @@ window.ExamEngine = (() => {
     else st.push(`الناتج: ${fx(p)}`);
     return st;
   }
-  const H = { d, add, sub, mul, shift, cmp, eq, str, ar, fx, pad, numOptions, cmpAnswer, cmpBody, P, colSteps, nineTen, multSteps, A };
+  // قسمة دقيقة: تعيد عددًا عشريًا منتهيًا أو null
+  function div(a, b) {
+    const s = Math.max(a.s, b.s), A = up(a, s), B = up(b, s);
+    if (!B) return null;
+    for (let k = 0; k <= 8; k++) { const n = A * P(k); if (n % B === 0) return norm({ i: n / B, s: k }); }
+    return null;
+  }
+  const frac = (a, b) => `⟦${typeof a === "string" ? a : fx(a)}/${typeof b === "string" ? b : fx(b)}⟧`;
+  // خطوات قاعدة ٤: نساوي المنازل، نحذف الفواصل، نقسم
+  function divSteps(a, b) {
+    const s = Math.max(a.s, b.s), A = up(a, s), B = up(b, s), q = div(a, b);
+    const st = [];
+    if (s > 0) {
+      st.push(`نساوي عدد الأرقام بعد الفاصلة في البسط والمقام بإضافة أصفار: ${frac(pad(a, s), pad(b, s))}.`);
+      st.push(`نحذف الفواصل من البسط والمقام معًا (لا تتغير قيمة الكسر): ${frac(ar(String(A)), ar(String(B)))}.`);
+    } else st.push(`لا توجد فواصل، فنقسم مباشرة: ${frac(ar(String(A)), ar(String(B)))}.`);
+    st.push(`نقسم: ${ar(String(A))} ÷ ${ar(String(B))} = ${q ? fx(q) : "…"}.`);
+    return st;
+  }
+  const H = { d, add, sub, mul, shift, cmp, eq, str, ar, fx, pad, numOptions, cmpAnswer, cmpBody, P, colSteps, nineTen, multSteps, A, div, frac, divSteps, up };
   const fmtTime = sec => `${String(Math.floor(sec / 60)).padStart(2, "0")}:${String(sec % 60).padStart(2, "0")}`;
   return { build, H, rng, fmtTime };
 })();

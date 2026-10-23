@@ -33,9 +33,10 @@
   const nextOf = id => { const c = lectures().find(l => l.id === id); return lectures().find(l => l.id > id && (l.section || "quant") === ((c && c.section) || "quant")); };
   function go(view, extra) {
     if (S.play && (view !== "lecture" || (extra && ((extra.lid && extra.lid !== S.play.lid) || (extra.part != null && extra.part !== S.play.part))))) { savePlay(true); }
+    const fx0 = document.getElementById("toast-fixed"); if (fx0) fx0.replaceChildren();
     const opening = view === "lecture" && (S.view !== "lecture" || (extra && extra.lid && extra.lid !== S.lid));
     Object.assign(S, { view, error: "" }, extra || {}); render(); window.scrollTo(0, 0);
-    if (opening && typeof toast === "function") setTimeout(() => toast("start"), 300);
+    if (opening && typeof toast === "function") { const lid = S.lid; setTimeout(() => { if (S.view === "lecture" && S.lid === lid) toast("start"); }, 300); }
   }
   async function refresh() { S.data = await API.portal(S.nid); }
   async function refresh0(nid, data) { S.nid = nid; S.data = await API.portal(nid) || data; }
