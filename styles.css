@@ -535,3 +535,6 @@ sup.ex { font-size: .68em; vertical-align: .6em; line-height: 0; margin-inline-s
 .sec-name, .sec-desc, .sec-meta, .sec-bar, .sec-go, .sec-icon { z-index: 1; }
 .sec-desc { max-width: 62%; }
 @media (max-width: 640px) { .sec-art { width: 70%; opacity: .45; } .sec-desc { max-width: 100%; } }
+
+/* شريط وضع الطالب التجريبي */
+.test-bar { background: repeating-linear-gradient(135deg, #f3d08b, #f3d08b 14px, #ecc56f 14px, #ecc56f 28px); color: #2a1c05; text-align: center; font-weight: 700; font-size: .9rem; padding: 6px 12px; }

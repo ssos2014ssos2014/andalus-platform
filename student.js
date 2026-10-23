@@ -1,5 +1,7 @@
 (function () {
   const app = document.getElementById("app");
+  const TEST_ID = "0000"; const isTest = () => S.nid === TEST_ID;
+
   const LETTERS = ["أ", "ب", "ج", "د", "هـ", "و"];
   const S = { nid: null, data: null, view: "login", lid: null, part: 0, quiz: null, result: null, error: "", busy: false };
 
@@ -43,12 +45,13 @@
 
   function band() {
     const st = settings();
-    return h("header", { class: "band" },
+    const testBar = S.nid === TEST_ID && h("div", { class: "test-bar" }, "👁 أنت في وضع الطالب التجريبي (٠٠٠٠). محاولاتك هنا لا تظهر في إحصاءات الطلاب.");
+    return [testBar, h("header", { class: "band" },
       h("div", { class: "band-inner" },
         h("div", { class: "brand" }, mark(), h("div", null, st.platform_name || "التأسيس والتدريب لاختبار القدرات العامة", h("small", null, st.school_name))),
         h("div", { class: "spacer" }),
         S.data && h("span", { class: "who" }, S.data.student.full_name),
-        S.data && h("button", { class: "btn ghost sm", onclick: logout }, "تسجيل الخروج")));
+        S.data && h("button", { class: "btn ghost sm", onclick: logout }, "تسجيل الخروج")))].filter(Boolean);
   }
   function logout() { ss.set("andalus-nid", null); ss.set("andalus-sid", null); clearInterval(pingTimer); Object.assign(S, { nid: null, data: null, quiz: null, result: null }); go("login"); }
 
@@ -61,13 +64,13 @@
     const form = h("form", { onsubmit: async e => {
       e.preventDefault();
       const nid = toLatinDigits(input.value);
-      if (!/^\d{5,14}$/.test(nid)) { S.error = "اكتب رقم الهوية بالأرقام فقط."; return render(); }
+      if (!/^\d{5,14}$/.test(nid) && nid !== TEST_ID) { S.error = "اكتب رقم الهوية بالأرقام فقط."; return render(); }
       btn.disabled = true; btn.textContent = "جارٍ التحقق…";
       try {
         const data = await API.portal(nid);
         if (!data) { S.error = "رقم الهوية غير مسجل في الدورة. تأكد من الرقم أو راجع معلمك."; return render(); }
         try { const sid = await API.login(nid); if (sid) ss.set("andalus-sid", sid); await refresh0(nid, data); } catch { Object.assign(S, { nid, data }); }
-        ss.set("andalus-nid", nid); startPing(); go(S.data.student.phone ? "home" : "phone");
+        ss.set("andalus-nid", nid); startPing(); go(S.data.student.phone || nid === TEST_ID ? "home" : "phone");
       } catch (err) { S.error = err.message; render(); }
     } },
       S.error && h("div", { class: "alert err", role: "alert" }, S.error),
@@ -395,23 +398,50 @@
     }
     // عرض مباشر كما في النسخة الأولى (بدون زر تشغيل وسيط)
     const bm = S.seek && S.seek.lid === l.id && S.seek.part === S.part ? S.seek.t : posOf(l);
-    if (part.youtube_id) return h("div", { class: "video" }, h("iframe", { src: `https://www.youtube-nocookie.com/embed/${encodeURIComponent(part.youtube_id)}?rel=0&modestbranding=1&playsinline=1${bm ? "&start=" + bm : ""}`,
+    if (part.youtube_id) return h("div", { class: "video" }, h("iframe", { id: "yt-frame", src: `https://www.youtube-nocookie.com/embed/${encodeURIComponent(part.youtube_id)}?rel=0&modestbranding=1&playsinline=1&enablejsapi=1&origin=${encodeURIComponent(location.origin)}${bm ? "&start=" + bm : ""}`,
       allow: "autoplay; fullscreen; encrypted-media; picture-in-picture", allowfullscreen: true, title: `${l.title} — ${part.label}`, loading: "lazy" }));
-    if (part.url) return h("div", { class: "video" }, h("video", { src: part.url + (bm ? "#t=" + bm : ""), controls: true, playsinline: true, preload: "metadata", controlslist: "nodownload" }));
+    if (part.url) return h("div", { class: "video" }, h("video", { id: "vid", src: part.url + (bm ? "#t=" + bm : ""), controls: true, playsinline: true, preload: "metadata", controlslist: "nodownload" }));
     return h("div", { class: "video" },
       h("iframe", { src: `https://drive.google.com/file/d/${encodeURIComponent(part.drive_id)}/preview${bm ? "?t=" + bm + "s" : ""}`, allow: "autoplay; fullscreen", allowfullscreen: true, title: `${l.title} — ${part.label}`, loading: "lazy" }),
       h("div", { class: "drive-shield", "aria-hidden": "true" }));
   }
+  // قراءة الوقت من المشغّل مباشرة وإيقافه (يوتيوب وملفات الفيديو فقط؛ Drive لا يسمح بذلك)
+  let YTW = null, YTF = null;
+  function prepYT() {
+    const f = document.getElementById("yt-frame"); if (!f || YTF === f) return;
+    YTF = f; YTW = null;
+    loadYT().then(() => { const p = new YT.Player(f, { events: { onReady: () => { if (YTF === f) YTW = p; } } }); });
+  }
+  async function captureTime() {
+    const v = document.getElementById("vid");
+    if (v) { try { v.pause(); } catch {} return Math.floor(v.currentTime || 0); }
+    if (document.getElementById("yt-frame")) {
+      prepYT();
+      for (let i = 0; i < 30 && !YTW; i++) await new Promise(r => setTimeout(r, 100));
+      if (!YTW) return null;
+      try { YTW.pauseVideo(); return Math.floor(YTW.getCurrentTime() || 0); } catch { return null; }
+    }
+    return null;
+  }
   function playerBar(l) {
     const saved = posOf(l);
+    const part0 = (l.parts || [])[S.part] || (l.parts || [])[0] || {};
+    let auto = !!(part0.youtube_id || part0.url);
     const mm = h("input", { type: "text", inputmode: "numeric", maxlength: "3", placeholder: "د", "aria-label": "الدقيقة", class: "tm" });
     const sc = h("input", { type: "text", inputmode: "numeric", maxlength: "2", placeholder: "ث", "aria-label": "الثانية", class: "tm" });
     if (saved) { mm.value = String(Math.floor(saved / 60)); sc.value = String(saved % 60).padStart(2, "0"); }
     const label = h("strong", { id: "bm-label" }, saved ? tfmt(saved) : "لم تحفظ بعد");
     const note = h("span", { class: "small", "aria-live": "polite", style: "color:var(--ok)" });
-    const saveBtn = h("button", { class: "btn", type: "submit" }, "📌 احفظ مكان توقفي");
+    const saveBtn = h("button", { class: "btn", type: "submit" }, auto ? "⏸ أوقف واحفظ مكان توقفي" : "📌 احفظ مكان توقفي");
     const form = h("form", { class: "bm-form", onsubmit: async e => {
       e.preventDefault();
+      if (auto) {
+        saveBtn.disabled = true;
+        const t0 = await captureTime();
+        saveBtn.disabled = false;
+        if (t0 == null) { note.style.color = "var(--warn)"; note.textContent = "تعذر قراءة الوقت من المشغّل، اكتبه يدويًا ثم اضغط احفظ."; auto = false; return; }
+        mm.value = String(Math.floor(t0 / 60)); sc.value = String(t0 % 60).padStart(2, "0");
+      }
       const m = parseInt(toLatinDigits(mm.value) || "0", 10), x = parseInt(toLatinDigits(sc.value) || "0", 10);
       if (isNaN(m) || isNaN(x) || x > 59 || m > 600) { note.style.color = "var(--warn)"; note.textContent = "اكتب الدقيقة والثانية كما تظهر في شريط المقطع، مثل ٢٣ : ٤٠"; return; }
       const t = m * 60 + x; saveBtn.disabled = true;
@@ -434,7 +464,9 @@
           h("button", { class: "linkbtn", onclick: () => { S.seek = { lid: l.id, part: S.part, t: saved }; render(); } }, "▶ تابع من هنا"),
           h("button", { class: "linkbtn", onclick: () => { S.seek = { lid: l.id, part: S.part, t: 0 }; render(); } }, "⟲ من البداية"))),
       form,
-      h("div", { class: "bm-hint small muted" }, "أوقف المقطع، واقرأ الوقت الظاهر في شريطه، ثم اكتبه هنا واضغط «احفظ». عند عودتك يبدأ المقطع من نفس المكان. ", note));
+      h("div", { class: "bm-hint small muted" }, auto
+        ? "اضغط الزر في أي لحظة: يتوقف المقطع ويُحفظ مكانه بالدقيقة والثانية تلقائيًا، وعند عودتك يبدأ من نفس المكان. "
+        : "أوقف المقطع، واقرأ الوقت الظاهر في شريطه، ثم اكتبه هنا واضغط «احفظ». عند عودتك يبدأ المقطع من نفس المكان. ", note));
   }
   function playerBarOld(l) {
     const exact = PL && PL.kind !== "drive";
@@ -772,13 +804,23 @@
   function render() {
     const views = { login: viewLogin, home: viewHome, section: viewSection, phone: viewPhone, lecture: viewLecture, quiz: viewQuiz, result: viewResult, sim: viewSim, simReview: viewSimReview, simResult: viewSimResult };
     const nodes = (S.data || S.view === "login" ? views[S.view] : viewLogin)();
-    app.replaceChildren(...[nodes].flat().filter(Boolean));
+    app.replaceChildren(...[nodes].flat(3).filter(Boolean));
     if (S.play) mountPlayer();
+    if (S.view === "lecture" && document.getElementById("yt-frame")) prepYT();
   }
   window.addEventListener("beforeunload", e => { if (S.view === "quiz" || S.view === "sim" || S.view === "simReview") { e.preventDefault(); e.returnValue = ""; } });
 
   (async () => {
     try { S.pub = await API.publicSettings(); } catch {}
+    try {
+      const as = new URLSearchParams(location.search).get("as");
+      if (as === TEST_ID) {
+        history.replaceState(null, "", location.pathname);
+        const d = await API.portal(TEST_ID);
+        if (d) { ss.set("andalus-nid", TEST_ID); try { const sid = await API.login(TEST_ID); if (sid) ss.set("andalus-sid", sid); } catch {} Object.assign(S, { nid: TEST_ID, data: await API.portal(TEST_ID) || d }); return go("home"); }
+        S.error = "حساب الطالب التجريبي غير موجود. شغّل ملف update-v8.sql في Supabase.";
+      }
+    } catch {}
     const saved = ss.get("andalus-nid");
     if (saved) {
       app.replaceChildren(h("div", { class: "loading" }, "جارٍ التحميل…"));
@@ -786,7 +828,7 @@
         const d = await API.portal(saved);
         if (d) {
           Object.assign(S, { nid: saved, data: d }); startPing();
-          if (!d.student.phone) return go("phone");
+          if (!d.student.phone && saved !== TEST_ID) return go("phone");
           let sim = null; try { sim = JSON.parse(ss.get(SIMKEY) || "null"); } catch {}
           if (sim && window.EXAMS[sim.lid]) { S.sim = sim; return go(Date.now() < sim.deadline ? "sim" : "simReview"); }
           return go("home");

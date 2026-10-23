@@ -24,6 +24,15 @@
       href: p ? `https://wa.me/${intl}?text=${encodeURIComponent(text || `السلام عليكم ${name}،\n`)}` : null });
     a.innerHTML = WA_ICON; return a;
   }
+  // تصفير طالب: حذف محاولاته ومشاهداته ودخوله وأماكن توقفه (ورقم جواله اختياريًا)
+  async function resetStudent(nid, clearPhone) {
+    for (const t of ["attempts", "views", "sessions", "watch_progress"]) {
+      const { error } = await sb.from(t).delete().eq("national_id", nid);
+      if (error && !/does not exist/.test(error.message)) throw error;
+    }
+    if (clearPhone) { const { error } = await sb.from("students").update({ phone: null }).eq("national_id", nid); if (error) throw error; }
+  }
+  const TEST_ID = "0000";
   const baseName = n => n.replace(/\.pdf$/i, "").replace(/[_]+/g, " ").trim();
 
   function h(tag, attrs, ...kids) {
@@ -87,7 +96,7 @@
       h("header", { class: "band" }, h("div", { class: "band-inner" },
         h("div", { class: "brand" }, (() => { const m = h("span", { class: "mark" }); m.innerHTML = '<svg viewBox="0 0 48 48" aria-hidden="true"><path d="M24 3l6.2 14.8L45 24l-14.8 6.2L24 45l-6.2-14.8L3 24l14.8-6.2z" fill="currentColor"/><rect x="15" y="15" width="18" height="18" transform="rotate(45 24 24)" fill="none" stroke="var(--tile-deep)" stroke-width="2.4"/></svg>'; return m; })(), h("div", null, (A.settings && A.settings.platform_name) || "التأسيس والتدريب لاختبار القدرات العامة", h("small", null, "لوحة المعلم"))),
         h("div", { class: "spacer" }),
-        h("a", { class: "btn ghost sm", href: "index.html", target: "_blank" }, "صفحة الطالب"),
+        h("a", { class: "btn gold sm", href: "index.html?as=" + TEST_ID, target: "_blank", title: "يفتح المنصة بحساب الطالب التجريبي ٠٠٠٠" }, "👁 الدخول كطالب"),
         h("button", { class: "btn ghost sm", onclick: async () => { await sb.auth.signOut(); viewLogin(); } }, "تسجيل الخروج"))),
       h("main", { class: "wrap" },
         h("nav", { class: "tabsbar", role: "tablist" }, TABS.map(([k, t]) =>
@@ -126,16 +135,43 @@
         list("الأكثر دخولًا", D.top_logins, r => `${AR(r.logins)} مرة`),
         list("الأكثر محاولات للاختبارات", D.top_tests, r => `${AR(r.tests)} اختبار`),
         list("الأعلى درجات", D.top_scores, r => `${AR(r.avg)}٪`, "حسب متوسط درجات الاختبارات"),
-        list("الأدنى درجات", D.low_scores, r => `${AR(r.avg)}٪`, "يحتاجون متابعة، راسلهم من زر واتساب"))];
+        list("الأدنى درجات", D.low_scores, r => `${AR(r.avg)}٪`, "يحتاجون متابعة، راسلهم من زر واتساب")),
+      await testPanel(D.test || {})];
+  }
+  async function testPanel(T) {
+    const { data: rows } = await sb.from("attempts").select("id, submitted_at, lecture_id, score, total, percent, passed")
+      .eq("national_id", TEST_ID).not("submitted_at", "is", null).order("submitted_at", { ascending: false }).limit(20);
+    const pc = v => v == null ? "—" : AR(v) + "٪";
+    return h("section", { class: "panel test-panel", style: "margin-top:18px" },
+      h("div", { class: "row", style: "justify-content:space-between" },
+        h("div", null, h("h2", { style: "margin:0" }, "👁 حساب الطالب التجريبي (٠٠٠٠)"),
+          h("p", { class: "small muted", style: "margin:4px 0 0" }, "حسابك لتجربة المنصة كما يراها الطالب. نتائجه هنا فقط، ولا تدخل في إحصاءات الطلاب ولا في تبويب النتائج.")),
+        h("div", { class: "row" },
+          h("a", { class: "btn gold", href: "index.html?as=" + TEST_ID, target: "_blank" }, "الدخول كطالب"),
+          h("button", { class: "btn ghost", onclick: async () => {
+            if (!confirm("تصفير حساب الطالب التجريبي؟ تُحذف محاولاته ومشاهداته.")) return;
+            try { await resetStudent(TEST_ID, true); flash("ok", "تم تصفير حساب الطالب التجريبي."); } catch (e) { flash("err", e.message); }
+          } }, "تصفير الحساب"))),
+      h("div", { class: "kpis", style: "margin:14px 0" },
+        h("div", { class: "stat" }, h("div", { class: "v" }, AR(T.logins || 0)), h("div", { class: "k" }, "مرات الدخول")),
+        h("div", { class: "stat" }, h("div", { class: "v" }, AR(T.tests || 0)), h("div", { class: "k" }, "الاختبارات")),
+        h("div", { class: "stat" }, h("div", { class: "v" }, pc(T.avg)), h("div", { class: "k" }, "المتوسط"), h("div", { class: "s" }, `أعلى ${pc(T.max)} · أدنى ${pc(T.min)}`))),
+      rows && rows.length ? h("div", { class: "table-wrap" }, h("table", null,
+        h("thead", null, h("tr", null, ["التاريخ", "المحاضرة", "الدرجة", "النسبة", "النتيجة"].map(x => h("th", null, x)))),
+        h("tbody", null, rows.map(r => h("tr", null,
+          h("td", { class: "small" }, new Date(r.submitted_at).toLocaleString("ar-SA")),
+          h("td", null, AR(r.lecture_id)), h("td", null, `${AR(r.score)} من ${AR(r.total)}`), h("td", null, AR(r.percent) + "٪"),
+          h("td", { class: r.passed ? "chip-pass" : "chip-fail" }, r.passed ? "اجتاز" : "يحتاج مراجعة"))))))
+        : h("p", { class: "small muted", style: "margin:0" }, "لا توجد محاولات للحساب التجريبي بعد."));
   }
 
   // ---------- الطلاب ----------
   async function tabStudents() {
-    const { count } = await sb.from("students").select("*", { count: "exact", head: true });
+    const { count } = await sb.from("students").select("*", { count: "exact", head: true }).neq("national_id", TEST_ID);
     const search = h("input", { type: "text", placeholder: "ابحث بالاسم أو رقم الهوية" });
     const list = h("div");
     async function load() {
-      let q = sb.from("students").select("national_id, full_name, phone, details, student_files(id, title, url, path)").order("full_name").limit(100);
+      let q = sb.from("students").select("national_id, full_name, phone, details, student_files(id, title, url, path)").neq("national_id", TEST_ID).order("full_name").limit(100);
       const t = search.value.trim();
       if (t) q = q.or(`full_name.ilike.%${t.replace(/[%,()]/g, "")}%,national_id.ilike.%${toLatinDigits(t).replace(/[%,()]/g, "")}%`);
       const { data, error } = await q; if (error) throw error;
@@ -163,7 +199,10 @@
             if (!confirm(`حذف جميع اختبارات ${s.full_name}؟ تعود محاضراته مقفلة حسب طريقة الفتح، ولا يمكن التراجع.`)) return;
             const { error, count } = await sb.from("attempts").delete({ count: "exact" }).eq("national_id", s.national_id);
             error ? flash("err", error.message) : flash("ok", `تم حذف ${count ?? ""} اختبار للطالب.`);
-          } }, "حذف اختباراته"), " ", h("button", { class: "btn danger sm", onclick: async () => {
+          } }, "حذف اختباراته"), " ", h("button", { class: "btn ghost sm", title: "حذف المحاولات والمشاهدات والدخول وأماكن التوقف ورقم الجوال", onclick: async () => {
+            if (!confirm(`تصفير ${s.full_name} ليبدأ من جديد؟ تُحذف محاولاته ومشاهداته وسجل دخوله وأماكن توقفه ورقم جواله، ويبقى اسمه ورقم هويته.`)) return;
+            try { await resetStudent(s.national_id, true); flash("ok", `تم تصفير ${s.full_name}، وسيُطلب منه رقم الجوال عند دخوله القادم.`); } catch (e) { flash("err", e.message); }
+          } }, "تصفير"), " ", h("button", { class: "btn danger sm", onclick: async () => {
             if (!confirm(`حذف الطالب ${s.full_name} ونتائجه؟`)) return;
             const { error } = await sb.from("students").delete().eq("national_id", s.national_id);
             error ? flash("err", error.message) : flash("ok", "تم حذف الطالب.");
@@ -519,7 +558,7 @@
     const out = h("div");
     let rows = [];
     async function load() {
-      let q = sb.from("attempts").select("id, submitted_at, national_id, lecture_id, score, total, percent, passed, students(full_name, phone)")
+      let q = sb.from("attempts").select("id, submitted_at, national_id, lecture_id, score, total, percent, passed, students(full_name, phone)").neq("national_id", TEST_ID)
         .not("submitted_at", "is", null).order("submitted_at", { ascending: false }).limit(1000);
       if (f.value.trim()) q = q.eq("national_id", toLatinDigits(f.value));
       if (ls.value) q = q.eq("lecture_id", +ls.value);
