@@ -280,17 +280,18 @@
   };
   function toast(kind) {
     const d = DUA[kind]; if (!d) return;
-    const slot = document.getElementById("toast-slot");
+    const mobile = window.matchMedia("(max-width: 1020px)").matches;
+    const slot = mobile ? null : document.getElementById("toast-slot");
     let host = slot;
     if (!host) { host = document.getElementById("toast-fixed") || document.body.appendChild(h("div", { id: "toast-fixed", class: "toast-fixed" })); }
-    host.replaceChildren();
+    host.replaceChildren(); host.classList.toggle("top", kind === "exam");
     const el = h("div", { class: "dua dua-" + kind, role: kind === "exam" ? "status" : "alert", "aria-live": "polite" },
       h("div", { class: "dua-head" }, h("span", { class: "dua-icon", "aria-hidden": "true" }, "🤲"), h("strong", null, d.title),
         h("button", { class: "dua-x", "aria-label": "إغلاق", onclick: () => el.remove() }, "×")),
       d.lines.map(t => h("p", null, t)),
       h("div", { class: "dua-timer" }, h("i")));
     host.append(el);
-    setTimeout(() => { el.classList.add("out"); setTimeout(() => el.remove(), 400); }, 15000);
+    setTimeout(() => { el.classList.add("out"); setTimeout(() => el.remove(), 400); }, 10000);
   }
 
   // ---------- مشغّل المقطع وحفظ مكان التوقف بالثانية ----------
@@ -399,10 +400,10 @@
     // عرض مباشر كما في النسخة الأولى (بدون زر تشغيل وسيط)
     const bm = S.seek && S.seek.lid === l.id && S.seek.part === S.part ? S.seek.t : posOf(l);
     if (part.youtube_id) return h("div", { class: "video" }, h("iframe", { id: "yt-frame", src: `https://www.youtube-nocookie.com/embed/${encodeURIComponent(part.youtube_id)}?rel=0&modestbranding=1&playsinline=1&enablejsapi=1&origin=${encodeURIComponent(location.origin)}${bm ? "&start=" + bm : ""}`,
-      allow: "autoplay; fullscreen; encrypted-media; picture-in-picture", allowfullscreen: true, title: `${l.title} — ${part.label}`, loading: "lazy" }));
+      allow: "autoplay; fullscreen; encrypted-media; picture-in-picture", allowfullscreen: true, title: `${l.title} — ${part.label}`, "data-k": S.vkey || 0 }));
     if (part.url) return h("div", { class: "video" }, h("video", { id: "vid", src: part.url + (bm ? "#t=" + bm : ""), controls: true, playsinline: true, preload: "metadata", controlslist: "nodownload" }));
     return h("div", { class: "video" },
-      h("iframe", { src: `https://drive.google.com/file/d/${encodeURIComponent(part.drive_id)}/preview${bm ? "?t=" + bm + "s" : ""}`, allow: "autoplay; fullscreen", allowfullscreen: true, title: `${l.title} — ${part.label}`, loading: "lazy" }),
+      h("iframe", { src: `https://drive.google.com/file/d/${encodeURIComponent(part.drive_id)}/preview${bm ? "?t=" + bm + "s" : ""}`, allow: "autoplay; fullscreen; encrypted-media", allowfullscreen: true, title: `${l.title} — ${part.label}`, referrerpolicy: "strict-origin-when-cross-origin", "data-k": S.vkey || 0 }),
       h("div", { class: "drive-shield", "aria-hidden": "true" }));
   }
   // قراءة الوقت من المشغّل مباشرة وإيقافه (يوتيوب وملفات الفيديو فقط؛ Drive لا يسمح بذلك)
@@ -520,7 +521,22 @@
         l.parts.map((p, i) => h("button", { "aria-pressed": String(i === S.part), onclick: () => go("lecture", { part: i }) }, p.label))),
       h("div", { class: "lec-layout" },
       h("div", { class: "lec-main" },
-      h("div", { class: "theater" }, player(l, part)),
+      h("div", { class: "theater", id: "theater" }, player(l, part)),
+      h("div", { class: "vtools" },
+        h("button", { class: "vbtn", onclick: async () => {
+          const el = document.getElementById("theater"); if (!el) return;
+          try {
+            if (document.fullscreenElement || document.webkitFullscreenElement) { (document.exitFullscreen || document.webkitExitFullscreen).call(document); return; }
+            if (el.requestFullscreen) await el.requestFullscreen(); else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+            else { alert("استخدم زر ملء الشاشة الموجود داخل المشغّل في الزاوية السفلية."); return; }
+            try { await screen.orientation.lock("landscape"); } catch {}
+          } catch { alert("استخدم زر ملء الشاشة الموجود داخل المشغّل في الزاوية السفلية."); }
+        } }, "⛶ ملء الشاشة"),
+        h("button", { class: "vbtn", onclick: () => {
+          S.vkey = (S.vkey || 0) + 1;
+          const el = document.getElementById("theater"); if (el) el.replaceChildren(player(l, part));
+        } }, "↻ إعادة تحميل المقطع"),
+        h("span", { class: "vhint" }, "إذا ظهر المقطع أسود أو لم تظهر أزرار التحكم: المس المقطع مرة، أو اضغط «إعادة تحميل المقطع».")),
       playerBar(l)),
       h("aside", { class: "lec-side" },
       h("div", { id: "toast-slot", class: "toast-slot" }),
@@ -641,9 +657,18 @@
   const ARD = s => String(s).replace(/[0-9]/g, c => "٠١٢٣٤٥٦٧٨٩"[c]);
   // نص بأرقام عربية، والأسس (² ³ …) تُعرض أسسًا عربية مرفوعة
   const SUPS = "⁰¹²³⁴⁵⁶⁷⁸⁹";
-  function rt(str) {
+  function rtPlain(str) {
     return String(str ?? "").split(/([⁰¹²³⁴⁵⁶⁷⁸⁹]+)/).filter(Boolean).map(part =>
       SUPS.includes(part[0]) ? h("sup", { class: "ex" }, [...part].map(c => "٠١٢٣٤٥٦٧٨٩"[SUPS.indexOf(c)]).join("")) : ARD(part));
+  }
+  // الجذور تُكتب ⁿ√{…} وتُعرض بعلامة جذر عربية (مقلوبة) وخط فوق ما تحتها
+  function rt(str) {
+    return String(str ?? "").split(/((?:[⁰¹²³⁴⁵⁶⁷⁸⁹]*)√\{[^}]*\})/).filter(Boolean).flatMap(part => {
+      const m = part.match(/^([⁰¹²³⁴⁵⁶⁷⁸⁹]*)√\{([^}]*)\}$/);
+      if (!m) return rtPlain(part);
+      const idx = m[1] ? [...m[1]].map(c => "٠١٢٣٤٥٦٧٨٩"[SUPS.indexOf(c)]).join("") : "";
+      return [h("span", { class: "rad" }, h("span", { class: "rsign" }, idx && h("sup", { class: "ridx" }, idx), h("span", { class: "rs" }, "√")), h("span", { class: "rin" }, rtPlain(m[2])))];
+    });
   }
   const tfmt = sec => ARD(ExamEngine.fmtTime(Math.max(0, Math.round(sec))));
   const saveSim = () => ss.set(SIMKEY, S.sim ? JSON.stringify(S.sim) : null);

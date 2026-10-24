@@ -422,12 +422,12 @@ tr:last-child td { border-bottom: 0; }
 .dua-head strong { font-size: 1.05rem; }
 .dua-icon { animation: duaBlink 1.6s ease-in-out infinite; }
 .dua-timer { height: 4px; }
-.dua-timer i { animation: duaBar 15s linear both; }
+.dua-timer i { animation: duaBar 10s linear both; }
 @keyframes duaGlow { 0%, 100% { box-shadow: 0 12px 30px rgba(120,84,20,.18), 0 0 0 0 rgba(216,169,76,0); border-color: #e9cf96; }
   50% { box-shadow: 0 12px 30px rgba(120,84,20,.22), 0 0 0 6px rgba(216,169,76,.35); border-color: #d8a94c; } }
 @keyframes duaBlink { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: .45; transform: scale(1.15); } }
 @media (prefers-color-scheme: dark) { .dua p { color: #fff3d6; } }
-@media (prefers-reduced-motion: reduce) { .dua { animation: duaIn .01s both; } .dua-icon { animation: none; } .dua-timer i { animation: duaBar 15s linear both; } }
+@media (prefers-reduced-motion: reduce) { .dua { animation: duaIn .01s both; } .dua-icon { animation: none; } .dua-timer i { animation: duaBar 10s linear both; } }
 
 /* المشغّل */
 .player-host { position: absolute; inset: 0; }
@@ -538,3 +538,80 @@ sup.ex { font-size: .68em; vertical-align: .6em; line-height: 0; margin-inline-s
 
 /* شريط وضع الطالب التجريبي */
 .test-bar { background: repeating-linear-gradient(135deg, #f3d08b, #f3d08b 14px, #ecc56f 14px, #ecc56f 28px); color: #2a1c05; text-align: center; font-weight: 700; font-size: .9rem; padding: 6px 12px; }
+
+/* ================= الجذور بالكتابة العربية ================= */
+.rad { display: inline-flex; align-items: flex-end; direction: rtl; vertical-align: -0.1em; margin: 0 1px; }
+.rsign { position: relative; display: inline-flex; }
+.rs { display: inline-block; transform: scaleX(-1); font-size: 1.3em; line-height: 1; font-weight: 400; }
+.ridx { position: absolute; top: -.55em; right: -.35em; font-size: .6em; }
+.rin { border-top: 1.6px solid currentColor; padding: 0 2px; line-height: 1.25; margin-inline-start: -1px; }
+
+/* ================= أدوات المقطع ================= */
+.vtools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; }
+.vbtn { border: 1px solid var(--line); background: var(--surface); border-radius: 99px; padding: 7px 14px; font-weight: 700; font-size: .88rem; cursor: pointer; color: var(--ink); }
+.vbtn:hover { border-color: var(--tile); }
+.vhint { font-size: .8rem; color: var(--muted); flex: 1 1 220px; }
+.theater:fullscreen { padding: 0; border-radius: 0; background: #000; display: flex; align-items: center; justify-content: center; }
+.theater:fullscreen .video { width: 100%; height: 100%; aspect-ratio: auto; border-radius: 0; }
+.theater:-webkit-full-screen { padding: 0; border-radius: 0; background: #000; }
+.theater:-webkit-full-screen .video { width: 100%; height: 100%; aspect-ratio: auto; border-radius: 0; }
+.drive-shield { width: 60px !important; height: 52px !important; }
+
+/* ================= الجوال ================= */
+.dua-timer i { animation-duration: 10s !important; }
+@media (max-width: 1020px) {
+  .toast-fixed { bottom: calc(10px + env(safe-area-inset-bottom, 0px)); padding: 0 10px; z-index: 80; }
+  .toast-fixed .dua { max-width: 640px; max-height: 42vh; overflow: auto; padding: 12px 14px 14px; box-shadow: 0 -6px 30px rgba(0,0,0,.28), 0 10px 30px rgba(0,0,0,.25); }
+  .toast-fixed .dua p { font-size: 1.06rem; line-height: 1.8; }
+  .toast-fixed .dua-head strong { font-size: .92rem; }
+}
+@media (max-width: 640px) {
+  .band-inner { padding: 10px 14px; gap: 8px; }
+  .brand { font-size: 1rem; gap: 8px; }
+  .brand small { font-size: .72rem; }
+  .mark { width: 30px; height: 30px; }
+  .band .who { display: none; }
+  .wrap { padding: 14px 12px 90px; }
+  .wrap.wide { padding-inline: 0; }
+  .wrap.wide > .row, .wrap.wide > .lec-head, .wrap.wide .lec-side, .wrap.wide .vtools, .wrap.wide .bmark, .wrap.wide > .alert, .wrap.wide > .tabs { margin-inline: 12px; }
+  .theater { border-radius: 0; padding: 0; box-shadow: none; }
+  .theater .video { border-radius: 0; }
+  .lec-head { gap: 10px; }
+  .lec-head h1 { font-size: 1.3rem; }
+  .lec-badge { width: 44px; height: 44px; font-size: 1.2rem; border-radius: 12px; }
+  .bmark { padding: 10px 12px; }
+  .bm-form { gap: 8px; }
+  .bm-form .btn { flex: 1 1 100%; }
+  .hero { padding: 18px; border-radius: 16px; }
+  .hero h1 { font-size: 1.5rem; }
+  .lgrid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .lc-cover { height: 96px; padding: 10px 12px; }
+  .lc-wm { font-size: 3.8rem; }
+  .lc-play { width: 38px; height: 38px; top: 10px; inset-inline-end: 10px; }
+  .lc-body { padding: 10px 12px 12px; gap: 6px; }
+  .lc-body .lc-title { font-size: .92rem; min-height: 2.8em; }
+  .unit-head { flex-wrap: wrap; }
+  .unit-prog { min-width: 100%; margin: 0; }
+  .sim-top { padding: 8px 12px; gap: 8px; }
+  .sim-top .clock { font-size: 1.1rem; }
+  .qbody { font-size: 1.05rem; }
+  .opt { padding: 12px; }
+  .sim-nav { position: sticky; bottom: 0; background: var(--paper); padding: 10px 0 calc(10px + env(safe-area-inset-bottom, 0px)); margin-top: 10px; z-index: 6; }
+  .sim-nav .btn { flex: 1; padding: 0 10px; }
+  .rgrid { grid-template-columns: repeat(6, 1fr); }
+  .stats { gap: 8px; }
+  .stat { padding: 10px 12px; }
+  .stat .v { font-size: 1.25rem; }
+  .test-bar { font-size: .78rem; }
+}
+@media (max-width: 380px) { .lgrid { grid-template-columns: 1fr; } }
+@media (max-width: 900px) and (orientation: landscape) { .lec-head { display: none; } .theater .video { max-height: 86vh; } }
+@media (max-width: 1020px) { .toast-fixed.top { bottom: auto; top: calc(8px + env(safe-area-inset-top, 0px)); } }
+@media (max-width: 640px) {
+  .band-inner { flex-wrap: nowrap; }
+  .brand { min-width: 0; flex: 1; }
+  .brand > div { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .band .spacer { display: none; }
+  .band .btn.sm { padding: 0 10px; min-height: 32px; font-size: .8rem; flex: none; }
+}
+@media (max-width: 640px) { .sim-nav .btn { font-size: .88rem; white-space: nowrap; } }
