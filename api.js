@@ -38,6 +38,7 @@ window.API = (() => {
     login: nid => rpc("student_login", { p_nid: nid }),
     savePosition: (nid, lid, part, pos, dur) => rpc("save_position", { p_nid: nid, p_lid: lid, p_part: part, p_pos: pos, p_dur: dur || null }),
     publicSettings: () => rpc("public_settings", {}),
+    videoFailed: nid => rpc("video_failed", { p_nid: nid }),
     ping: (sid, nid) => rpc("student_ping", { p_session: sid, p_nid: nid }),
     setPhone: (nid, phone) => rpc("set_phone", { p_nid: nid, p_phone: phone }),
     submitPractice: (nid, attempt, items, sec) => rpc("submit_practice", { p_attempt: attempt, p_nid: nid, p_items: items, p_duration: sec })
@@ -82,6 +83,7 @@ window.API = (() => {
   const wait = () => new Promise(r => setTimeout(r, 150));
   const demoApi = {
     async publicSettings() { return SETTINGS; },
+    async videoFailed() { return false; },
     async savePosition(nid, lid, part, pos, dur) { const st = load(); ((st.pos ||= {})[nid + ":" + lid] ||= {})[part] = pos; if (dur) ((st.dur ||= {})[nid + ":" + lid] ||= {})[part] = dur; save(st); return true; },
     async login(nid) {
       await wait(); const st = load();

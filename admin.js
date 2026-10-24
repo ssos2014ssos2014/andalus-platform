@@ -515,7 +515,23 @@
                     const src = parseSource(inp.value); if (!src) return flash("err", "الرابط غير معروف. استخدم رابط يوتيوب أو رابط ملف فيديو مباشر.");
                     const parts = [...l.parts]; parts[i] = { label: p.label, ...src, ...(p.drive_id && !src.drive_id ? { drive_id: p.drive_id } : {}) };
                     try { await saveLecture(l, { parts }); flash("ok", `تم ربط ${l.title}.`); } catch (err) { flash("err", err.message); }
-                  } }, "حفظ")));
+                  } }, "حفظ"),
+                  h("label", { class: "btn gold sm", title: "رفع ملف فيديو MP4 مباشرة إلى المنصة" }, "⬆ رفع فيديو",
+                    h("input", { type: "file", accept: "video/mp4,video/webm,.mp4,.webm", style: "display:none", onchange: async e => {
+                      const f = e.target.files[0]; if (!f) return;
+                      if (!/\.(mp4|webm)$/i.test(f.name) && !/^video\/(mp4|webm)$/.test(f.type)) return flash("err", "اختر ملف فيديو بصيغة MP4.");
+                      if (f.size > 200 * 1024 * 1024) return flash("err", "حجم الملف أكبر من 200 ميجابايت. استخدم النسخة المضغوطة.");
+                      const lab = e.target.parentElement; lab.firstChild.textContent = "جارٍ الرفع… لا تغلق الصفحة";
+                      try {
+                        const path = `lec-${l.id}/part-${i + 1}-${uid()}.${/webm$/i.test(f.name) ? "webm" : "mp4"}`;
+                        const { error } = await sb.storage.from("lecture-videos").upload(path, f, { contentType: f.type || "video/mp4", cacheControl: "31536000", upsert: false });
+                        if (error) throw new Error(/Bucket not found/i.test(error.message) ? "شغّل ملف update-v10.sql في Supabase أولًا." : /exceeded|too large|maximum/i.test(error.message) ? "حجم الملف أكبر من الحد المسموح في Supabase. ارفع حد حجم الملفات من إعدادات Storage." : error.message);
+                        const url = sb.storage.from("lecture-videos").getPublicUrl(path).data.publicUrl;
+                        if (p.video_path) await sb.storage.from("lecture-videos").remove([p.video_path]);
+                        const parts = [...l.parts]; parts[i] = { label: p.label, url, video_path: path, ...(p.drive_id ? { drive_id: p.drive_id } : {}) };
+                        await saveLecture(l, { parts }); flash("ok", `تم رفع مقطع ${l.title} وربطه بالمنصة.`);
+                      } catch (err) { lab.firstChild.textContent = "⬆ رفع فيديو"; flash("err", err.message); }
+                    } }))));
             });
             if (!(l.parts || []).length) {
               const inp = h("input", { type: "text", placeholder: "رابط المقطع", style: "direction:ltr;min-height:36px" });
@@ -603,15 +619,26 @@
     const sn = h("input", { type: "text", value: s.school_name });
     const cn = h("input", { type: "text", value: s.course_name });
     const pn = h("input", { type: "text", value: s.platform_name || "التأسيس والتدريب لاختبار القدرات العامة" });
+    const vm = h("select", null, [["auto", "تلقائي: المقاطع المرفوعة، وتتحول إلى Drive عند الوصول لحد الاستهلاك حتى نهاية الشهر"], ["direct", "المقاطع المرفوعة دائمًا"], ["drive", "مقاطع Google Drive دائمًا"]]
+      .map(([v, t]) => h("option", { value: v, selected: (s.video_mode || "auto") === v }, t)));
+    const nextMonth = (() => { const d = new Date(); return new Date(Date.UTC(d.getFullYear(), d.getMonth() + 1, 1)).toISOString().slice(0, 10); })();
+    const today = new Date().toISOString().slice(0, 10), onDrive = s.drive_until && today < s.drive_until;
     const am = h("select", null, [["pass", "مرتبطة باجتياز اختبار المحاضرة السابقة بنسبة الاجتياز"], ["watch", "تُفتح تباعًا بعد مشاهدة المحاضرة السابقة"], ["open", "جميع المحاضرات مفتوحة للطلاب"]]
       .map(([v, t]) => h("option", { value: v, selected: (s.access_mode || "pass") === v }, t)));
     return h("form", { class: "panel", onsubmit: async e => {
       e.preventDefault();
-      const { error } = await sb.from("settings").update({ pass_mark: +pm.value, questions_per_quiz: +qn.value, school_name: sn.value.trim(), course_name: cn.value.trim(), platform_name: pn.value.trim() || "التأسيس والتدريب لاختبار القدرات العامة", access_mode: am.value }).eq("id", 1);
+      const { error } = await sb.from("settings").update({ pass_mark: +pm.value, questions_per_quiz: +qn.value, school_name: sn.value.trim(), course_name: cn.value.trim(), platform_name: pn.value.trim() || "التأسيس والتدريب لاختبار القدرات العامة", access_mode: am.value, video_mode: vm.value }).eq("id", 1);
       error ? flash("err", error.message) : flash("ok", "تم حفظ الإعدادات.");
     } },
       h("h2", null, "الإعدادات"),
       h("label", { class: "field" }, h("span", null, "طريقة فتح المحاضرات للطلاب"), am),
+      h("label", { class: "field" }, h("span", null, "مصدر المقاطع"), vm),
+      h("div", { class: "alert " + (onDrive ? "info" : "ok"), style: "display:flex;gap:10px;align-items:center;flex-wrap:wrap" },
+        h("span", { style: "flex:1;min-width:220px" }, onDrive ? `⚠️ المنصة تعرض الآن مقاطع Google Drive حتى ${s.drive_until}، ثم تعود تلقائيًا للمقاطع المرفوعة.` : "✓ المنصة تعرض المقاطع المرفوعة. المحاضرات التي ليس لها مقطع مرفوع تُعرض من Drive."),
+        onDrive
+          ? h("button", { class: "btn ghost sm", type: "button", onclick: async () => { const { error } = await sb.from("settings").update({ drive_until: null }).eq("id", 1); error ? flash("err", error.message) : flash("ok", "عادت المنصة إلى المقاطع المرفوعة."); } }, "العودة للمقاطع المرفوعة الآن")
+          : h("button", { class: "btn ghost sm", type: "button", onclick: async () => { const { error } = await sb.from("settings").update({ drive_until: nextMonth }).eq("id", 1); error ? flash("err", error.message) : flash("ok", `تم التحويل إلى Drive حتى ${nextMonth}.`); } }, "التحويل إلى Drive حتى نهاية الشهر")),
+      h("p", { class: "small muted", style: "margin-top:-6px" }, "في الوضع التلقائي: إذا تعذر تشغيل المقاطع المرفوعة عند ٥ طلاب مختلفين خلال ساعة، تتحول المنصة وحدها إلى Drive حتى أول الشهر القادم. وإن رأيت في صفحة Usage أن الاستهلاك قارب الحد، اضغط «التحويل إلى Drive حتى نهاية الشهر»."),
       h("p", { class: "small muted", style: "margin-top:-6px" }, "عند الربط بالاجتياز تُفتح المحاضرة التالية حين يحصل الطالب على نسبة الاجتياز المحددة أدناه أو أعلى."),
       h("div", { class: "grid2" },
         h("label", { class: "field" }, h("span", null, "اسم المنصة (يظهر أعلى الصفحات)"), pn),

@@ -401,7 +401,7 @@
     const bm = S.seek && S.seek.lid === l.id && S.seek.part === S.part ? S.seek.t : posOf(l);
     if (part.youtube_id) return h("div", { class: "video" }, h("iframe", { id: "yt-frame", src: `https://www.youtube-nocookie.com/embed/${encodeURIComponent(part.youtube_id)}?rel=0&modestbranding=1&playsinline=1&enablejsapi=1&origin=${encodeURIComponent(location.origin)}${bm ? "&start=" + bm : ""}`,
       allow: "autoplay; fullscreen; encrypted-media; picture-in-picture", allowfullscreen: true, title: `${l.title} — ${part.label}`, "data-k": S.vkey || 0 }));
-    if (part.url) return h("div", { class: "video" }, h("video", { id: "vid", src: part.url + (bm ? "#t=" + bm : ""), controls: true, playsinline: true, preload: "metadata", controlslist: "nodownload" }));
+    if (part.url && !(part.drive_id && (driveMode() || (S.vfail || {})[`${l.id}:${S.part}`]))) return h("div", { class: "video" }, h("video", { id: "vid", src: part.url, controls: true, playsinline: true, "webkit-playsinline": true, preload: "metadata", controlslist: "nodownload", oncontextmenu: e => e.preventDefault() }));
     return h("div", { class: "video" },
       h("iframe", { src: `https://drive.google.com/file/d/${encodeURIComponent(part.drive_id)}/preview${bm ? "?t=" + bm + "s" : ""}`, allow: "autoplay; fullscreen; encrypted-media", allowfullscreen: true, title: `${l.title} — ${part.label}`, referrerpolicy: "strict-origin-when-cross-origin", "data-k": S.vkey || 0 }),
       h("div", { class: "drive-shield", "aria-hidden": "true" }));
@@ -412,6 +412,45 @@
     const f = document.getElementById("yt-frame"); if (!f || YTF === f) return;
     YTF = f; YTW = null;
     loadYT().then(() => { const p = new YT.Player(f, { events: { onReady: () => { if (YTF === f) YTW = p; } } }); });
+  }
+  // وضع المقاطع: مرفوعة مباشرة، أو Drive مؤقتًا حتى نهاية الشهر (لتجنب أي تكاليف إضافية)
+  function driveMode() {
+    const st = S.pub || {};
+    if (st.video_mode === "drive") return true;
+    if (st.video_mode === "direct") return false;
+    const today = st.today || new Date().toISOString().slice(0, 10);
+    return !!(st.drive_until && today < st.drive_until);
+  }
+  function videoFallback(lid, part) {
+    (S.vfail ||= {})[`${lid}:${part}`] = true;
+    if (S.nid) API.videoFailed(S.nid).then(on => { if (on) API.publicSettings().then(p => { S.pub = p; }).catch(() => {}); }).catch(() => {});
+    const l = lecture(lid), pt = l && (l.parts || [])[part];
+    const el = document.getElementById("theater");
+    if (el && pt && pt.drive_id && S.view === "lecture" && S.lid === lid) el.replaceChildren(player(l, pt));
+  }
+  // ملف فيديو مرفوع: حفظ تلقائي بالثانية، والاستئناف، ومعرفة نهاية المقطع
+  let VIDEL = null;
+  function setupVid() {
+    const v = document.getElementById("vid"); if (!v || VIDEL === v) return;
+    VIDEL = v;
+    const lid = S.lid, part = S.part, l0 = lecture(lid), start = S.seek && S.seek.lid === lid && S.seek.part === part ? S.seek.t : posOf(l0);
+    let lastSave = 0, loaded = false;
+    const pt = (l0 && l0.parts || [])[part] || {};
+    if (pt.drive_id) {
+      v.addEventListener("error", () => videoFallback(lid, part), { once: true });
+      v.addEventListener("loadeddata", () => { loaded = true; }, { once: true });
+      setTimeout(() => { if (!loaded && v.isConnected && v.networkState === 3) videoFallback(lid, part); }, 15000);
+    }
+    const save = t => { if (!S.nid) return; setLocalPos(lid, part, t); API.savePosition(S.nid, lid, part, t, Math.floor(v.duration || 0) || null).catch(() => {}); };
+    v.addEventListener("loadedmetadata", () => { if (start && start < (v.duration || 1e9) - 3) { try { v.currentTime = start; } catch {} } }, { once: true });
+    v.addEventListener("timeupdate", () => { const t = Math.floor(v.currentTime); if (Math.abs(t - lastSave) >= 15) { lastSave = t; save(t); } });
+    v.addEventListener("pause", () => { if (!v.ended) save(Math.floor(v.currentTime)); });
+    v.addEventListener("ended", async () => {
+      save(0);
+      const l = lecture(lid);
+      if (l && !l.watched) { try { await API.markWatched(S.nid, lid); await refresh(); } catch {} }
+      if (S.view === "lecture" && S.lid === lid) { render(); toast("end"); }
+    });
   }
   async function captureTime() {
     const v = document.getElementById("vid");
@@ -832,11 +871,13 @@
     app.replaceChildren(...[nodes].flat(3).filter(Boolean));
     if (S.play) mountPlayer();
     if (S.view === "lecture" && document.getElementById("yt-frame")) prepYT();
+    if (S.view === "lecture" && document.getElementById("vid")) setupVid();
   }
   window.addEventListener("beforeunload", e => { if (S.view === "quiz" || S.view === "sim" || S.view === "simReview") { e.preventDefault(); e.returnValue = ""; } });
 
   (async () => {
     try { S.pub = await API.publicSettings(); } catch {}
+    setInterval(() => { API.publicSettings().then(p => { if (p) S.pub = p; }).catch(() => {}); }, 30 * 60000);
     try {
       const as = new URLSearchParams(location.search).get("as");
       if (as === TEST_ID) {

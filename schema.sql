@@ -780,5 +780,56 @@ end $$;
 grant execute on function admin_dashboard() to authenticated;
 
 
+-- =====================================================================
+-- تحديث ٩: عناوين المحاضرات ٣–٦ وتفعيل الاختبار المحاكي لها
+-- شغّله مرة واحدة في Supabase → SQL Editor
+-- =====================================================================
+update lectures set exam_mode = 'generated', topic = 'قابلية القسمة والأعداد الأولية' where id = 3;
+update lectures set exam_mode = 'generated', topic = 'الجذور: خصائصها وتبسيطها والمقارنة بينها' where id = 4;
+update lectures set exam_mode = 'generated', topic = 'الأشكال الرباعية: المربع والمستطيل والمعين ومتوازي الأضلاع وشبه المنحرف' where id = 5;
+update lectures set exam_mode = 'generated', topic = 'الزوجي والفردي، المتوسط، المثلث، الزوايا، الاحتمالات، الدوائر والسرعات' where id = 6;
+
+
+-- =====================================================================
+-- تحديث ١٠: رفع المقاطع مباشرة إلى المنصة (بدل Google Drive)
+-- شغّله مرة واحدة في Supabase → SQL Editor
+-- =====================================================================
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('lecture-videos', 'lecture-videos', true, 209715200, array['video/mp4', 'video/webm'])
+on conflict (id) do update set public = true, file_size_limit = excluded.file_size_limit, allowed_mime_types = excluded.allowed_mime_types;
+
+drop policy if exists andalus_admin_files on storage.objects;
+create policy andalus_admin_files on storage.objects for all to authenticated
+  using (bucket_id in ('lecture-files', 'student-files', 'lecture-videos') and public.is_admin())
+  with check (bucket_id in ('lecture-files', 'student-files', 'lecture-videos') and public.is_admin());
+
+
+-- =====================================================================
+-- تحديث ١١: التحويل التلقائي إلى مقاطع Google Drive حتى نهاية الشهر لتجنب أي تكاليف إضافية
+-- شغّله مرة واحدة في Supabase → SQL Editor
+-- =====================================================================
+alter table settings add column if not exists video_mode text not null default 'auto';  -- auto | direct | drive
+alter table settings add column if not exists drive_until date;                       -- حتى هذا التاريخ تُعرض مقاطع Drive
+
+create table if not exists video_failures (
+  id bigint generated always as identity primary key,
+  national_id text not null,
+  at timestamptz not null default now()
+);
+alter table video_failures enable row level security;
+drop policy if exists teacher_all on video_failures;
+create policy teacher_all on video_failures for all to authenticated using (is_admin()) with check (is_admin());
+
+-- يبلّغ عنه متصفح الطالب إذا تعذر تشغيل المقطع المرفوع.
+-- إذا تعذر عند ٥ طلاب مختلفين خلال ساعة (غالبًا بسبب الوصول لحد الاستهلاك) تتحول المنصة إلى Drive حتى بداية الشهر القادم.
+create or replace function video_failed(p_nid text) returns boolean
+language plpgsql security definer set search_path = public as $$
+declare n int; m text; u date;
+begin
+  if not exists (select 1 from students where national_id = p_nid) then return false; end if;
+  insert into video_failures (national_id) values (p_nid);
+  delete from video_failures where at < now() - interval '2 days';
+  select count(distinct national_id) into n from video_failures where at > now() - interval '1 hour';
+  
 -- ---------- بريد المعلم (غيّره إلى بريدك ثم شغّل السطر) ----------
 -- insert into admins (email) values ('teacher@example.com') on conflict do nothing;
