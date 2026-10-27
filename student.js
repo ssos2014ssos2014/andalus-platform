@@ -1,6 +1,6 @@
 (function () {
   const app = document.getElementById("app");
-  const TEST_ID = "0000"; const isTest = () => S.nid === TEST_ID;
+  const TEST_ID = "0000"; const UNIT = 5; // عدد المحاضرات في كل وحدة const isTest = () => S.nid === TEST_ID;
 
   const LETTERS = ["أ", "ب", "ج", "د", "هـ", "و"];
   const S = { nid: null, data: null, view: "login", lid: null, part: 0, quiz: null, result: null, error: "", busy: false };
@@ -183,7 +183,7 @@
     const f = S.filter || "all";
     const shown = ls.filter(l => f === "all" || (f === "open" && l.state === "open" && !l.done) || (f === "done" && l.done));
     const groups = [];
-    for (const l of shown) { const g = Math.floor((num(l) - 1) / 10); (groups[g] ||= []).push(l); }
+    for (const l of shown) { const g = Math.floor((num(l) - 1) / UNIT); (groups[g] ||= []).push(l); }
     const ACCESS = { open: "جميع المحاضرات مفتوحة لك.", watch: "تُفتح كل محاضرة بعد مشاهدة التي قبلها.", pass: `تُفتح كل محاضرة بعد اجتياز اختبار التي قبلها بنسبة ${AR(settings().pass_mark)}٪.` };
     const card = l => {
       const pos = Math.max(0, ...Object.values(l.positions || { 0: 0 }));
@@ -207,7 +207,8 @@
           watchedPct != null && !l.done && h("div", { class: "lc-score" }, h("div", { class: "lc-bar watch" }, h("i", { style: `width:${watchedPct}%` })), h("span", null, `شاهدت ${AR(watchedPct)}٪`)),
           l.best != null && h("div", { class: "lc-score" }, h("div", { class: "lc-bar" }, h("i", { style: `width:${l.best}%` })), h("span", null, "أفضل درجة " + pct(l.best))))));
     };
-    const unitNames = ["الأولى", "الثانية", "الثالثة", "الرابعة", "الخامسة", "السادسة", "السابعة", "الثامنة", "التاسعة", "العاشرة"];
+    const unitNames = ["الأولى", "الثانية", "الثالثة", "الرابعة", "الخامسة", "السادسة", "السابعة", "الثامنة", "التاسعة", "العاشرة",
+      "الحادية عشرة", "الثانية عشرة", "الثالثة عشرة", "الرابعة عشرة", "الخامسة عشرة", "السادسة عشرة", "السابعة عشرة", "الثامنة عشرة", "التاسعة عشرة", "العشرون"];
     return [band(), h("main", { class: "wrap" },
       h("div", { class: "row", style: "margin-bottom:14px" }, h("button", { class: "btn ghost sm", onclick: () => go("home") }, "→ الصفحة الرئيسية")),
       h("section", { class: "hero " + sec.tone },
@@ -450,6 +451,8 @@
     v.addEventListener("ended", async () => {
       save(0);
       const l = lecture(lid);
+      const last = !l || part >= (l.parts || []).length - 1;
+      if (!last) { if (S.view === "lecture" && S.lid === lid) { const n = document.querySelector(".parts-note"); if (n) { n.scrollIntoView({ behavior: "smooth", block: "center" }); n.style.animation = "pnPulse 1.2s ease-in-out 4"; } } return; }
       if (l && !l.watched) { try { await API.markWatched(S.nid, lid); await refresh(); } catch {} }
       if (S.view === "lecture" && S.lid === lid) { render(); toast("end"); }
     });
@@ -558,8 +561,18 @@
         h("span", { class: "lec-badge" }, AR(String(num(l)).padStart(2, "0"))),
         h("div", null, h("h1", { style: "margin:0" }, l.title), l.topic && h("p", { class: "muted", style: "margin:0" }, l.topic))),
       S.error && h("div", { class: "alert err", role: "alert" }, S.error),
-      l.parts.length > 1 && h("div", { class: "tabs", role: "group", "aria-label": "أجزاء المحاضرة" },
-        l.parts.map((p, i) => h("button", { "aria-pressed": String(i === S.part), onclick: () => go("lecture", { part: i }) }, p.label))),
+      l.parts.length > 1 && h("div", { class: "parts-note", role: "note" },
+        h("div", { class: "pn-icon", "aria-hidden": "true" }, "🎞"),
+        h("div", { class: "pn-text" },
+          h("strong", null, `تنبيه: هذه المحاضرة مقسّمة إلى ${l.parts.length === 2 ? "جزأين" : AR(l.parts.length) + " أجزاء"}، وأنت الآن تشاهد ${["الجزء الأول", "الجزء الثاني", "الجزء الثالث", "الجزء الرابع"][S.part] || "الجزء " + AR(S.part + 1)}.`),
+          h("span", null, S.part < l.parts.length - 1
+            ? "بعد انتهاء هذا المقطع، انتقل إلى الجزء التابع بالضغط على زره هنا أو على تبويب الأجزاء فوق المقطع، ولا تضغط «أنهيت المشاهدة» قبل مشاهدة كل الأجزاء."
+            : "هذا هو الجزء الأخير. إن لم تشاهد الجزء السابق فارجع إليه من تبويب الأجزاء فوق المقطع، ثم اضغط «أنهيت مشاهدة جميع الأجزاء».")),
+        S.part < l.parts.length - 1
+          ? h("button", { class: "btn gold sm", onclick: () => go("lecture", { part: S.part + 1 }) }, `انتقل إلى ${l.parts[S.part + 1].label || "الجزء التالي"} ←`)
+          : h("button", { class: "btn ghost sm", onclick: () => go("lecture", { part: 0 }) }, "→ الجزء الأول")),
+      l.parts.length > 1 && h("div", { class: "tabs parts-tabs", role: "group", "aria-label": "أجزاء المحاضرة" },
+        l.parts.map((p, i) => h("button", { "aria-pressed": String(i === S.part), onclick: () => go("lecture", { part: i }) }, `${["١", "٢", "٣", "٤"][i] || AR(i + 1)}. ${p.label}`))),
       h("div", { class: "lec-layout" },
       h("div", { class: "lec-main" },
       h("div", { class: "theater", id: "theater" }, player(l, part)),

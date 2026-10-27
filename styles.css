@@ -660,3 +660,17 @@ sup.ex { font-size: .68em; vertical-align: .6em; line-height: 0; margin-inline-s
 .ip-close { border: 0; border-radius: 12px; background: #0d2238; color: #fff; font-weight: 800; padding: 12px; cursor: pointer; font-size: .95rem; }
 .ip-bg { display: flex; align-items: flex-start; justify-content: center; }
 .ip-card { margin: auto; }
+
+/* ================= تنبيه المحاضرات ذات الأجزاء ================= */
+.parts-note { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; background: linear-gradient(135deg, #fff4d9, #ffeab8); border: 2px solid #e2b04a; color: #3b2a0c;
+  border-radius: 14px; padding: 12px 16px; margin: 4px 0 12px; box-shadow: 0 6px 18px rgba(195,139,42,.18); animation: pnPulse 1.6s ease-in-out 3; }
+.pn-icon { font-size: 1.8rem; flex: none; }
+.pn-text { flex: 1 1 280px; display: grid; gap: 2px; }
+.pn-text strong { font-size: 1rem; }
+.pn-text span { font-size: .86rem; line-height: 1.7; }
+.parts-tabs button { font-weight: 700; padding: 8px 16px; }
+.parts-tabs button[aria-pressed=true] { background: #c38b2a; border-color: #c38b2a; color: #fff; }
+@keyframes pnPulse { 0%, 100% { box-shadow: 0 6px 18px rgba(195,139,42,.18); } 50% { box-shadow: 0 0 0 6px rgba(226,176,74,.35); } }
+@media (prefers-color-scheme: dark) { .parts-note { background: linear-gradient(135deg, #3a2d14, #4a3816); color: #f6e7c6; } }
+@media (max-width: 640px) { .wrap.wide .parts-note, .wrap.wide .parts-tabs { margin-inline: 12px; } .parts-note .btn { width: 100%; } }
+@media (prefers-reduced-motion: reduce) { .parts-note { animation: none; } }
