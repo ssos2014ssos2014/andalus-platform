@@ -92,7 +92,7 @@
     return hh ? `${AR(hh)} س ${AR(mm)} د` : mm ? `${AR(mm)} دقيقة` : sec ? "أقل من دقيقة" : `${AR(0)} د`; };
   const pct = v => v == null ? "—" : AR(v) + "٪";
   const MARK = '<svg viewBox="0 0 48 48" aria-hidden="true"><path d="M24 3l6.2 14.8L45 24l-14.8 6.2L24 45l-6.2-14.8L3 24l14.8-6.2z" fill="currentColor"/><rect x="15" y="15" width="18" height="18" transform="rotate(45 24 24)" fill="none" stroke="var(--tile-deep)" stroke-width="2.4"/></svg>';
-  function mark() { const s = h("span", { class: "mark" }); s.innerHTML = MARK; return s; }
+  function mark() { return h("span", { class: "logo-plate" }, h("img", { src: "logo.png", alt: "شعار ثانوية الأندلس" })); }
 
   const SECTIONS = {
     quant: { name: "القسم الكمي", icon: "∑", desc: "الحساب والجبر والهندسة والإحصاء وحل المسائل", tone: "q" },
@@ -147,6 +147,7 @@
     };
     return [band(), h("main", { class: "wrap" },
       h("section", { class: "hero hero-home" },
+        h("span", { class: "hero-logo" }, h("img", { src: "logo.png", alt: "شعار ثانوية الأندلس" })),
         h("div", { class: "hero-text" },
           h("p", { class: "eyebrow" }, settings().school_name),
           h("h1", null, `مرحبًا ${first} 👋`),
@@ -210,6 +211,7 @@
     return [band(), h("main", { class: "wrap" },
       h("div", { class: "row", style: "margin-bottom:14px" }, h("button", { class: "btn ghost sm", onclick: () => go("home") }, "→ الصفحة الرئيسية")),
       h("section", { class: "hero " + sec.tone },
+        h("span", { class: "hero-logo" }, h("img", { src: "logo.png", alt: "شعار ثانوية الأندلس" })),
         h("div", { class: "hero-text" },
           h("p", { class: "eyebrow" }, settings().platform_name),
           h("h1", { class: "sec-title" }, svgSpan("sec-icon sm", SEC_ICON[key]), sec.name),
@@ -878,6 +880,20 @@
   (async () => {
     try { S.pub = await API.publicSettings(); } catch {}
     setInterval(() => { API.publicSettings().then(p => { if (p) S.pub = p; }).catch(() => {}); }, 30 * 60000);
+    try {
+      const hp = new URLSearchParams(location.hash.slice(1)), qp = new URLSearchParams(location.search);
+      const direct = toLatinDigits(hp.get("nid") || qp.get("nid") || "");
+      if (direct && /^\d{4,14}$/.test(direct)) {
+        history.replaceState(null, "", location.pathname);
+        const d = await API.portal(direct);
+        if (d) {
+          ss.set("andalus-nid", direct); try { const sid = await API.login(direct); if (sid) ss.set("andalus-sid", sid); } catch {}
+          Object.assign(S, { nid: direct, data: await API.portal(direct) || d }); startPing();
+          return go(S.data.student.phone || direct === TEST_ID ? "home" : "phone");
+        }
+        S.error = "رقم الهوية المرسل من نظام المدرسة غير مسجل في المنصة.";
+      }
+    } catch {}
     try {
       const as = new URLSearchParams(location.search).get("as");
       if (as === TEST_ID) {

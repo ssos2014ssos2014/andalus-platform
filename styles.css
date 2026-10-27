@@ -615,3 +615,48 @@ sup.ex { font-size: .68em; vertical-align: .6em; line-height: 0; margin-inline-s
   .band .btn.sm { padding: 0 10px; min-height: 32px; font-size: .8rem; flex: none; }
 }
 @media (max-width: 640px) { .sim-nav .btn { font-size: .88rem; white-space: nowrap; } }
+
+/* ================= الشعار ================= */
+.logo-plate { display: inline-grid; place-items: center; background: #fff; border-radius: 12px; padding: 4px 8px; box-shadow: 0 2px 8px rgba(0,0,0,.18); flex: none; }
+.logo-plate img { height: 40px; width: auto; display: block; }
+.login-hero .logo-plate { padding: 10px 18px; border-radius: 18px; margin: 0 auto 12px; }
+.login-hero .logo-plate img { height: 96px; }
+.hero-logo { position: absolute; inset-inline-end: 22px; top: 18px; background: rgba(255,255,255,.95); border-radius: 16px; padding: 8px 12px; z-index: 2; box-shadow: 0 6px 18px rgba(0,0,0,.2); }
+.hero-logo img { height: 70px; display: block; }
+@media (max-width: 640px) { .logo-plate img { height: 30px; } .hero-logo img { height: 46px; } .hero-logo { padding: 5px 8px; top: 12px; inset-inline-end: 12px; } .login-hero .logo-plate img { height: 72px; } }
+
+/* ================= حقوق الملكية الفكرية ================= */
+.ip-foot { display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap; padding: 16px 12px calc(16px + env(safe-area-inset-bottom, 0px)); color: var(--muted); font-size: .82rem; border-top: 1px solid var(--line); margin-top: 24px; }
+.ip-foot img { height: 26px; background: #fff; border-radius: 6px; padding: 2px 4px; }
+.ip-foot button { background: none; border: 1px solid var(--line); border-radius: 99px; padding: 4px 12px; font-weight: 700; color: var(--tile-deep); cursor: pointer; font-size: .8rem; }
+.ip-bg { position: fixed; inset: 0; z-index: 200; background: rgba(8, 18, 28, .72); display: grid; place-items: center; padding: 14px; overflow: auto; }
+.ip-card { position: relative; width: min(480px, 100%); background: #fff; color: #13293d; border-radius: 20px; overflow: hidden; box-shadow: 0 30px 80px rgba(0,0,0,.4); }
+.ip-x { position: absolute; top: 12px; inset-inline-start: 12px; width: 32px; height: 32px; border-radius: 50%; border: 0; background: #e5484d; color: #fff; font-size: 1.2rem; cursor: pointer; z-index: 2; }
+.ip-head { background: linear-gradient(160deg, #0d2238, #1c3c5e); color: #fff; text-align: center; padding: 26px 16px 22px; }
+.ip-shield { width: 58px; height: 58px; margin: 0 auto 10px; border-radius: 50%; background: linear-gradient(135deg, #f3c34b, #d69a17); display: grid; place-items: center; color: #fff; }
+.ip-shield svg { width: 28px; height: 28px; }
+.ip-head h2 { margin: 0; color: #f3c34b; font-size: 1.3rem; }
+.ip-head small { opacity: .8; font-size: .75rem; }
+.ip-body { padding: 16px; display: grid; gap: 12px; }
+.ip-people { border: 1px solid #e3e8ee; border-radius: 14px; padding: 14px; text-align: center; background: #f9fbfc; }
+.ip-logo { height: 64px; margin: 0 auto 6px; display: block; }
+.ip-p { display: grid; justify-items: center; gap: 2px; padding: 10px 0; }
+.ip-p + .ip-p { border-top: 1px dashed #d7dee5; }
+.ip-av { width: 52px; height: 52px; border-radius: 50%; background: #13293d; color: #f3c34b; display: grid; place-items: center; font-size: 1.4rem; font-weight: 800; border: 3px solid #f3c34b; margin-bottom: 4px; }
+.ip-p em { font-style: normal; color: #d69a17; font-size: .75rem; font-weight: 700; }
+.ip-p b { font-size: 1.05rem; }
+.ip-p span:last-child { font-size: .82rem; color: #55687a; font-weight: 600; }
+.ip-school { margin: 6px 0 0; font-size: .78rem; color: #6b7f8e; }
+.ip-tbl { margin: 0; border: 1px solid #cfe3f3; border-radius: 12px; background: #f4f9fd; padding: 4px 12px; }
+.ip-tbl div { display: flex; justify-content: space-between; gap: 10px; padding: 8px 0; font-size: .82rem; }
+.ip-tbl div + div { border-top: 1px solid #dbe9f4; }
+.ip-tbl dt { color: #6b7f8e; flex: none; }
+.ip-tbl dd { margin: 0; font-weight: 700; text-align: end; }
+.ip-sig { border: 1px dashed #c9d3dc; border-radius: 12px; padding: 10px 12px; font-size: .78rem; display: grid; gap: 4px; }
+.ip-sig code { font-size: .68rem; word-break: break-all; color: #3d5468; }
+.ip-sig small { color: #8a9aa8; font-size: .68rem; }
+.ip-law { background: #fff6e8; border: 1px solid #f3d8a5; border-radius: 12px; padding: 10px 12px; font-size: .76rem; color: #8a5d12; }
+.ip-law p { margin: 4px 0 0; line-height: 1.8; }
+.ip-close { border: 0; border-radius: 12px; background: #0d2238; color: #fff; font-weight: 800; padding: 12px; cursor: pointer; font-size: .95rem; }
+.ip-bg { display: flex; align-items: flex-start; justify-content: center; }
+.ip-card { margin: auto; }

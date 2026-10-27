@@ -62,6 +62,17 @@
 
   // ---------- الدخول ----------
   async function boot() {
+    // دخول مباشر من نظام إدارة ثانوية الأندلس: admin.html#sso=<رمز الدخول>
+    const sso = new URLSearchParams(location.hash.slice(1)).get("sso");
+    if (sso) {
+      history.replaceState(null, "", location.pathname);
+      try {
+        const raw = decodeURIComponent(escape(atob(sso.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((sso.length + 3) % 4))));
+        const i = raw.indexOf("|"), email = raw.slice(0, i), password = raw.slice(i + 1);
+        const cur = (await sb.auth.getSession()).data.session;
+        if (!cur || cur.user.email !== email) { await sb.auth.signOut(); const { error } = await sb.auth.signInWithPassword({ email, password }); if (error) return viewLogin("رمز الدخول المباشر غير صالح. تأكد من إنشاء حساب الدخول المباشر في Supabase."); }
+      } catch { return viewLogin("رمز الدخول المباشر غير صالح."); }
+    }
     const { data } = await sb.auth.getSession();
     if (!data.session) return viewLogin();
     const { data: ok } = await sb.rpc("is_admin");
@@ -94,7 +105,7 @@
     const body = h("div", null, h("div", { class: "loading" }, "جارٍ التحميل…"));
     app.replaceChildren(
       h("header", { class: "band" }, h("div", { class: "band-inner" },
-        h("div", { class: "brand" }, (() => { const m = h("span", { class: "mark" }); m.innerHTML = '<svg viewBox="0 0 48 48" aria-hidden="true"><path d="M24 3l6.2 14.8L45 24l-14.8 6.2L24 45l-6.2-14.8L3 24l14.8-6.2z" fill="currentColor"/><rect x="15" y="15" width="18" height="18" transform="rotate(45 24 24)" fill="none" stroke="var(--tile-deep)" stroke-width="2.4"/></svg>'; return m; })(), h("div", null, (A.settings && A.settings.platform_name) || "التأسيس والتدريب لاختبار القدرات العامة", h("small", null, "لوحة المعلم"))),
+        h("div", { class: "brand" }, h("span", { class: "logo-plate" }, h("img", { src: "logo.png", alt: "شعار ثانوية الأندلس" })), h("div", null, (A.settings && A.settings.platform_name) || "التأسيس والتدريب لاختبار القدرات العامة", h("small", null, "لوحة المعلم"))),
         h("div", { class: "spacer" }),
         h("a", { class: "btn gold sm", href: "index.html?as=" + TEST_ID, target: "_blank", title: "يفتح المنصة بحساب الطالب التجريبي ٠٠٠٠" }, "👁 الدخول كطالب"),
         h("button", { class: "btn ghost sm", onclick: async () => { await sb.auth.signOut(); viewLogin(); } }, "تسجيل الخروج"))),
@@ -479,7 +490,13 @@
             const m = toLatinDigits(line.split(/\s+/)[0]).match(/^(\d+)(?:-(\d+))?$/);
             const src = parseSource(line.split(/\s+/).slice(1).join(" "));
             const n = m ? +m[1] : 0, id = sec === "verbal" && n < 1000 ? n + 1000 : n;
-            const l = A.lectures.find(x => x.id === id);
+            let l = A.lectures.find(x => x.id === id);
+            if (m && src && !l && (sec === "verbal" || id < 1000)) {
+              // المحاضرة غير موجودة بعد: ننشئها تلقائيًا في القسم الحالي
+              const row = { id, title: `المحاضرة ${n}`, topic: "", parts: [], section: sec };
+              const { error } = await sb.from("lectures").insert(row);
+              if (!error) { A.lectures.push(row); A.lectures.sort((x, y) => x.id - y.id); l = row; }
+            }
             if (!m || !src || !l) { bad.push(line.slice(0, 40)); continue; }
             const pi = m[2] ? +m[2] - 1 : 0, parts = [...(l.parts || [])];
             while (parts.length <= pi) parts.push({ label: parts.length ? `الجزء ${["الأول", "الثاني", "الثالث", "الرابع"][parts.length] || parts.length + 1}` : "المحاضرة" });
