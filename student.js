@@ -649,7 +649,7 @@
       S.error && h("div", { class: "alert err", role: "alert" }, S.error),
       h("section", { class: "panel" },
         h("div", { class: "small muted", style: "margin-bottom:6px" }, `السؤال ${Q.i + 1} من ${total}`),
-        h("div", { class: "qbody" }, rt(q.body)),
+        h("div", { class: "qbody" }, qView(q.body)),
         h("div", { class: "opts", role: "radiogroup" }, opts),
         h("div", { class: "exam-nav" },
           h("button", { class: "btn ghost", disabled: Q.i === 0, onclick: () => { Q.i--; render(); } }, "السابق"),
@@ -711,6 +711,12 @@
   const ARD = s => String(s).replace(/[0-9]/g, c => "٠١٢٣٤٥٦٧٨٩"[c]);
   // نص بأرقام عربية، والأسس (² ³ …) تُعرض أسسًا عربية مرفوعة
   const SUPS = "⁰¹²³⁴⁵⁶⁷⁸⁹";
+  // سؤال فيه نص قرائي: «اقرأ النص ثم أجب:\n\nالنص\n\nالسؤال»
+  function qView(body) {
+    const parts = String(body).split("\n\n");
+    if (parts.length >= 3) return [h("div", { class: "q-intro" }, rt(parts[0])), h("div", { class: "passage" }, rt(parts.slice(1, -1).join("\n\n"))), h("div", null, rt(parts[parts.length - 1]))];
+    return rt(body);
+  }
   function rtPlain(str) {
     return String(str ?? "").split(/([⁰¹²³⁴⁵⁶⁷⁸⁹]+)/).filter(Boolean).map(part =>
       SUPS.includes(part[0]) ? h("sup", { class: "ex" }, [...part].map(c => "٠١٢٣٤٥٦٧٨٩"[SUPS.indexOf(c)]).join("")) : ARD(part));
@@ -777,7 +783,7 @@
           h("span", { class: "qnum" }, ARD(Q.i + 1)),
           h("button", { class: "btn ghost sm flag" + (Q.flags[Q.i] ? " on" : ""), "aria-pressed": String(!!Q.flags[Q.i]),
             onclick: () => { Q.flags[Q.i] = !Q.flags[Q.i]; saveSim(); render(); } }, Q.flags[Q.i] ? "★ مميز للمراجعة" : "☆ تمييز للمراجعة")),
-        h("div", { class: "qbody" }, rt(q.body)),
+        h("div", { class: "qbody" }, qView(q.body)),
         h("div", { class: "opts", role: "radiogroup" }, opts)),
       h("div", { class: "sim-nav" },
         h("button", { class: "btn ghost", disabled: pos <= 0, onclick: () => { Q.i = nav[pos - 1]; saveSim(); render(); } }, "السابق"),
@@ -865,7 +871,7 @@
           const sk = def.skills[it.skill];
           return h("li", { class: "wrong" },
             h("div", { class: "small muted" }, `السؤال ${ARD(it.n)} · `, rt(sk.title)),
-            h("div", { class: "rv-q" }, rt(it.body)),
+            h("div", { class: "rv-q" }, qView(it.body)),
             h("div", { class: "rv-ans" },
               h("div", { class: "rv-bad" }, h("span", null, "إجابتك"), h("strong", null, it.chosen == null ? "لم تُجب" : rt(it.options[it.chosen])), h("em", null, "✗")),
               h("div", { class: "rv-good" }, h("span", null, "الإجابة الصحيحة"), h("strong", null, rt(it.options[it.correct])), h("em", null, "✓"))),

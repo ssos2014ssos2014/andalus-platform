@@ -77,7 +77,7 @@ window.API = (() => {
     return qCount(lid) === 0 && st.views.some(v => v.nid === nid && v.lid === lid);
   }
   function unlocked(st, nid, lid) {
-    const prev = window.LECTURES.filter(l => l.id < lid).map(l => l.id);
+    const sec = ((window.LECTURES.find(l => l.id === lid) || {}).section || "quant"), prev = window.LECTURES.filter(l => l.id < lid && (l.section || "quant") === sec).map(l => l.id);
     return prev.length === 0 || done(st, nid, Math.max(...prev));
   }
   const wait = () => new Promise(r => setTimeout(r, 150));

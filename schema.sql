@@ -831,5 +831,15 @@ begin
   delete from video_failures where at < now() - interval '2 days';
   select count(distinct national_id) into n from video_failures where at > now() - interval '1 hour';
   
+-- =====================================================================
+-- تحديث ١٢: عنوان المحاضرة ٧ وتفعيل الاختبار المحاكي لها
+-- =====================================================================
+update lectures set exam_mode = 'generated', topic = 'النسبة والنسبة المئوية والمتتابعات وخانة الآحاد والتباديل' where id = 7;
+
+-- =====================================================================
+-- تحديث ١٤: اختبار محاكي للمحاضرة الأولى في القسم اللفظي
+-- =====================================================================
+update lectures set exam_mode = 'generated', topic = 'التناظر اللفظي، إكمال الجمل، الخطأ السياقي، استيعاب المقروء' where id = 1001;
+
 -- ---------- بريد المعلم (غيّره إلى بريدك ثم شغّل السطر) ----------
 -- insert into admins (email) values ('teacher@example.com') on conflict do nothing;
