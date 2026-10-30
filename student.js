@@ -202,7 +202,7 @@
           h("div", { class: "lc-title" }, l.topic || `${sec.name} · المحاضرة ${AR(num(l))}`),
           h("div", { class: "lc-meta" },
             h("span", { class: "pill " + status[0] }, status[1]),
-            l.exam_mode === "generated" ? h("span", null, "اختبار محاكي") : l.question_count ? h("span", null, "اختبار") : null,
+            (l.exam_mode === "generated" || (window.EXAMS && window.EXAMS[l.id] && !l.question_count)) ? h("span", null, "اختبار محاكي") : l.question_count ? h("span", null, "اختبار") : null,
             pos > 0 && !l.done && h("span", null, "توقفت عند " + tfmt(pos))),
           watchedPct != null && !l.done && h("div", { class: "lc-score" }, h("div", { class: "lc-bar watch" }, h("i", { style: `width:${watchedPct}%` })), h("span", null, `شاهدت ${AR(watchedPct)}٪`)),
           l.best != null && h("div", { class: "lc-score" }, h("div", { class: "lc-bar" }, h("i", { style: `width:${l.best}%` })), h("span", null, "أفضل درجة " + pct(l.best))))));
@@ -530,7 +530,7 @@
     if (!l || l.state === "locked") { S.view = "home"; return viewHome(); }
     const part = (l.parts || [])[S.part] || (l.parts || [])[0];
     const st = settings();
-    const sim = l.exam_mode === "generated" && window.EXAMS[l.id];
+    const sim = (window.EXAMS && window.EXAMS[l.id] && (l.exam_mode === "generated" || !l.question_count)) ? window.EXAMS[l.id] : null;
     const hasQuiz = l.question_count > 0 || !!sim;
     const next = nextOf(l.id);
     const qn = Math.min(st.questions_per_quiz, l.question_count);
