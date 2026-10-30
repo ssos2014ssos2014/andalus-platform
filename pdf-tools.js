@@ -5,7 +5,15 @@ window.PDFTools = (() => {
   const latin = s => String(s ?? "")
     .replace(/[٠-٩]/g, d => "٠١٢٣٤٥٦٧٨٩".indexOf(d))
     .replace(/[۰-۹]/g, d => "۰۱۲۳۴۵۶۷۸۹".indexOf(d));
-  const norm = s => latin(String(s).normalize("NFKC"))
+  // كشوف نور تستخدم ترميز خط خاص: حروف في نطاق 0370–03FF تقابل أشكال الحروف العربية FE70–FEFF، ومكتوبة بالترتيب المرئي
+  const SPECIAL = { 0x2EF: "\u0621", 0xB7: "\u0625", 0xBCC: "\uFDF2" };
+  const isNoor = s => /[\u0370-\u03FF\u0BCC\u02EF]/.test(s);
+  const decodeNoor = s => [...s].map(ch => {
+    const n = ch.codePointAt(0);
+    if (SPECIAL[n]) return SPECIAL[n];
+    return n >= 0x370 && n <= 0x3FF ? String.fromCharCode(0xFE00 + (n & 0xFF)) : ch;
+  }).reverse().join("");
+  const norm = s => latin((isNoor(s) ? decodeNoor(s) : String(s)).normalize("NFKC"))
     .replace(/[\u200e\u200f\u202a-\u202e\u2066-\u2069\u0640]/g, "")
     .replace(/\s+/g, " ").trim();
 
@@ -39,7 +47,7 @@ window.PDFTools = (() => {
   function students(ls) {
     const found = {};
     for (const ln of ls) {
-      const m = lineText(ln).match(/(?<!\d)[12]\d{9}(?!\d)/);
+      const m = lineText(ln).match(/(?<!\d)\d{10}(?!\d)/);
       if (!m) continue;
       // نجمع العناصر العربية المتجاورة في "خلايا"، ونختار الخلية الأطول اسمًا
       const runs = []; let cur = null, prev = null;

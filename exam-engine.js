@@ -67,7 +67,7 @@ window.ExamEngine = (() => {
         let q = null;
         for (let tries = 0; tries < 60; tries++) {
           const c = sk.gen(R, H);
-          if (!c) continue;
+          if (!c || !Array.isArray(c.options) || c.options.length !== 4 || c.correct < 0 || c.correct > 3 || new Set(c.options).size !== 4) continue;
           const sig = key + "|" + c.sig;
           if (used.has(sig) || items.some(x => x.sig === sig)) continue;
           // نوّع الأسلوب داخل الاختبار نفسه ما أمكن
@@ -75,9 +75,9 @@ window.ExamEngine = (() => {
           q = { ...c, sig, skill: key }; break;
         }
         // إذا استُنفدت كل الصيغ الجديدة (بعد عشرات المحاولات) نسمح بصيغة قديمة لا تتكرر داخل الاختبار نفسه
-        for (let tries = 0; !q && tries < 60; tries++) {
+        for (let tries = 0; !q && tries < 200; tries++) {
           const c = sk.gen(R, H);
-          if (c && !items.some(x => x.sig === key + "|" + c.sig)) q = { ...c, sig: key + "|" + c.sig, skill: key, repeat: true };
+          if (c && Array.isArray(c.options) && c.options.length === 4 && c.correct >= 0 && c.correct <= 3 && new Set(c.options).size === 4 && !items.some(x => x.sig === key + "|" + c.sig)) q = { ...c, sig: key + "|" + c.sig, skill: key, repeat: true };
         }
         if (q) { styleCount[q.style] = 1; items.push(q); }
       }
@@ -150,7 +150,25 @@ window.ExamEngine = (() => {
     st.push(`نقسم: ${ar(String(A))} ÷ ${ar(String(B))} = ${q ? fx(q) : "…"}.`);
     return st;
   }
-  const H = { d, add, sub, mul, shift, cmp, eq, str, ar, fx, pad, numOptions, cmpAnswer, cmpBody, P, colSteps, nineTen, multSteps, A, div, frac, divSteps, up };
+  // خيارات نصية (جذور، كسور، ط …): الصحيح + ثلاثة خاطئة مختلفة على الأقل
+  function strOptions(R, correct, wrongs) {
+    const out = [correct];
+    for (const w of wrongs) if (w != null && w !== "" && !out.includes(w)) out.push(w);
+    if (out.length < 4) return { options: null, correct: -1 };
+    const o = R.shuffle(out.slice(0, 4));
+    return { options: o, correct: o.indexOf(correct) };
+  }
+  // جذر: rad(٢, ٣) ← ٢√٣ ، rad(1, ١٥) ← √١٥ ، rad(1, ٣٢, 5) ← الجذر الخامس
+  const SUPD = "⁰¹²³⁴⁵⁶⁷⁸⁹";
+  function rad(coef, inner, idx) {
+    const c = coef === 1 || coef === "" || coef == null ? "" : (typeof coef === "number" ? A(coef) : coef);
+    const ix = idx && idx !== 2 ? String(idx).split("").map(x => SUPD[x]).join("") : "";
+    return `${c}${ix}√{${typeof inner === "number" ? A(inner) : inner}}`;
+  }
+  // تبسيط √n إلى (خارج، داخل)
+  function simp(n) { let o = 1, i = n; for (let k = Math.floor(Math.sqrt(n)); k > 1; k--) if (i % (k * k) === 0) { o *= k; i /= k * k; break; } return [o, i]; }
+  const radS = (coef, inner) => { if (inner === 1) return A(coef); const [o, i] = simp(inner); return i === 1 ? A(coef * o) : rad(coef * o, i); };
+  const H = { d, add, sub, mul, shift, cmp, eq, str, ar, fx, pad, numOptions, cmpAnswer, cmpBody, P, colSteps, nineTen, multSteps, A, div, frac, divSteps, up, strOptions, rad, simp, radS };
   const fmtTime = sec => `${String(Math.floor(sec / 60)).padStart(2, "0")}:${String(sec % 60).padStart(2, "0")}`;
   return { build, H, rng, fmtTime };
 })();
