@@ -526,7 +526,17 @@
             const partRows = (l.parts || []).map((p, i) => {
               const inp = h("input", { type: "text", placeholder: "رابط يوتيوب أو ملف فيديو", style: "direction:ltr;min-height:36px" }); inp.value = srcLink(p);
               return h("div", { style: "margin-bottom:8px" },
-                h("div", { class: "small" }, h("strong", null, p.label || `الجزء ${i + 1}`), " · ", h("span", { class: p.youtube_id || p.url ? "chip-pass" : "muted" }, srcLabel(p))),
+                h("div", { class: "small" }, h("strong", null, p.label || `الجزء ${i + 1}`), " · ", h("span", { class: p.youtube_id || p.url ? "chip-pass" : "muted" }, srcLabel(p)),
+                  p.file_name ? h("span", { class: "muted" }, ` · الملف: ${p.file_name}`) : null,
+                  p.url ? [" · ", h("a", { href: p.url, target: "_blank", rel: "noopener" }, "معاينة")] : null,
+                  p.url && p.drive_id ? [" · ", h("button", { class: "linkbtn", onclick: async () => {
+                    if (!confirm(`إزالة المقطع المرفوع من ${l.title} (${sec === "verbal" ? "القسم اللفظي" : "القسم الكمي"}) والعودة لمقطع Google Drive الأصلي؟`)) return;
+                    try {
+                      if (p.video_path) await sb.storage.from("lecture-videos").remove([p.video_path]);
+                      const parts = [...l.parts]; parts[i] = { label: p.label, drive_id: p.drive_id };
+                      await saveLecture(l, { parts }); flash("ok", `أُزيل المقطع المرفوع من ${l.title} وعاد مقطع Drive.`);
+                    } catch (err) { flash("err", err.message); }
+                  } }, "إزالة المقطع المرفوع")] : null),
                 h("div", { class: "row", style: "gap:6px;flex-wrap:nowrap" }, inp,
                   h("button", { class: "btn ghost sm", onclick: async () => {
                     const src = parseSource(inp.value); if (!src) return flash("err", "الرابط غير معروف. استخدم رابط يوتيوب أو رابط ملف فيديو مباشر.");
@@ -538,6 +548,16 @@
                       const f = e.target.files[0]; if (!f) return;
                       if (!/\.(mp4|webm)$/i.test(f.name) && !/^video\/(mp4|webm)$/.test(f.type)) return flash("err", "اختر ملف فيديو بصيغة MP4.");
                       if (f.size > 200 * 1024 * 1024) return flash("err", "حجم الملف أكبر من 200 ميجابايت. استخدم النسخة المضغوطة.");
+                      // حماية من رفع ملف إلى محاضرة أو قسم غير مقصود (أسماء ملفاتنا: lecture-05.mp4 للكمي و verbal-05.mp4 للفظي)
+                      const num = sec === "verbal" ? l.id - 1000 : l.id, secName = sec === "verbal" ? "القسم اللفظي" : "القسم الكمي";
+                      const m = f.name.match(/(lecture|verbal)-0*(\d+)/i);
+                      let warn = "";
+                      if (m) {
+                        const fs = m[1].toLowerCase() === "verbal" ? "verbal" : "quant", fn = Number(m[2]);
+                        if (fs !== sec) warn += `\n⚠️ تنبيه: الملف يخص ${fs === "verbal" ? "القسم اللفظي" : "القسم الكمي"} وأنت في ${secName}!`;
+                        if (fn !== num) warn += `\n⚠️ تنبيه: رقم الملف (${fn}) لا يطابق رقم المحاضرة (${num})!`;
+                      }
+                      if (!confirm(`رفع الملف «${f.name}» إلى ${l.title} في ${secName}؟${warn}`)) { e.target.value = ""; return; }
                       const lab = e.target.parentElement; lab.firstChild.textContent = "جارٍ الرفع… لا تغلق الصفحة";
                       try {
                         const path = `lec-${l.id}/part-${i + 1}-${uid()}.${/webm$/i.test(f.name) ? "webm" : "mp4"}`;
@@ -545,7 +565,7 @@
                         if (error) throw new Error(/Bucket not found/i.test(error.message) ? "شغّل ملف update-v10.sql في Supabase أولًا." : /exceeded|too large|maximum/i.test(error.message) ? "حجم الملف أكبر من الحد المسموح في Supabase. ارفع حد حجم الملفات من إعدادات Storage." : error.message);
                         const url = sb.storage.from("lecture-videos").getPublicUrl(path).data.publicUrl;
                         if (p.video_path) await sb.storage.from("lecture-videos").remove([p.video_path]);
-                        const parts = [...l.parts]; parts[i] = { label: p.label, url, video_path: path, ...(p.drive_id ? { drive_id: p.drive_id } : {}) };
+                        const parts = [...l.parts]; parts[i] = { label: p.label, url, video_path: path, file_name: f.name, ...(p.drive_id ? { drive_id: p.drive_id } : {}) };
                         await saveLecture(l, { parts }); flash("ok", `تم رفع مقطع ${l.title} وربطه بالمنصة.`);
                       } catch (err) { lab.firstChild.textContent = "⬆ رفع فيديو"; flash("err", err.message); }
                     } }))));
