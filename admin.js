@@ -33,6 +33,18 @@
     if (clearPhone) { const { error } = await sb.from("students").update({ phone: null }).eq("national_id", nid); if (error) throw error; }
   }
   const TEST_ID = "0000";
+  // استيراد الطلاب: يستبعد أرقام الهوية المسجلة في مدرسة أخرى بدل أن يتوقف الاستيراد
+  async function upsertStudents(recs) {
+    const { data, error } = await sb.rpc("foreign_student_ids", { p_ids: recs.map(r => r.national_id) });
+    if (error) throw new Error(error.message.includes("foreign_student_ids") ? "شغّل ملف update-schools.sql في Supabase أولًا." : error.message);
+    const foreign = data || [], skip = new Set(foreign), list = recs.filter(r => !skip.has(r.national_id));
+    for (let i = 0; i < list.length; i += 500) {
+      const { error } = await sb.from("students").upsert(list.slice(i, i + 500), { onConflict: "national_id" });
+      if (error) throw error;
+    }
+    return { done: list.length, foreign };
+  }
+  const importMsg = (r, extra) => `تم استيراد ${r.done} طالبًا${extra || ""}.` + (r.foreign.length ? ` لم يُستورد ${r.foreign.length} لأن أرقام هوياتهم مسجلة في مدرسة أخرى: ${r.foreign.join("، ")}.` : "");
   const baseName = n => n.replace(/\.pdf$/i, "").replace(/[_]+/g, " ").trim();
 
   function h(tag, attrs, ...kids) {
@@ -77,6 +89,8 @@
     if (!data.session) return viewLogin();
     const { data: ok } = await sb.rpc("is_admin");
     if (!ok) return viewLogin("هذا الحساب ليس ضمن حسابات المعلمين المسجلة في جدول admins.");
+    // مدرسة المعلم: تحدد الهوية والطلاب الظاهرين (العزل نفسه مطبق في قاعدة البيانات)
+    try { const { data: sk } = await sb.rpc("my_school"); if (sk) SCHOOL.set(sk); } catch {}
     const { data: ls } = await sb.from("lectures").select("*").order("id");
     const { data: st } = await sb.from("settings").select("*").eq("id", 1).single(); A.settings = st || {};
     A.lectures = ls || [];
@@ -100,17 +114,21 @@
   }
 
   // ---------- الإطار ----------
-  const TABS = [["dashboard", "لوحة المؤشرات"], ["students", "الطلاب"], ["questions", "الأسئلة"], ["lectures", "المحاضرات"], ["results", "النتائج"], ["settings", "الإعدادات"]];
+  const ALL_TABS = [["dashboard", "لوحة المؤشرات"], ["students", "الطلاب"], ["questions", "الأسئلة"], ["lectures", "المحاضرات"], ["results", "النتائج"], ["settings", "الإعدادات"]];
+  // المحاضرات والأسئلة والإعدادات مشتركة وتُدار من حساب الأندلس فقط
+  const OWNER_TABS = ["questions", "lectures", "settings"];
+  const tabs = () => SCHOOL.key === "andalus" ? ALL_TABS : ALL_TABS.filter(([k]) => !OWNER_TABS.includes(k));
   async function render() {
+    if (!tabs().some(([k]) => k === A.tab)) A.tab = "dashboard";
     const body = h("div", null, h("div", { class: "loading" }, "جارٍ التحميل…"));
     app.replaceChildren(
       h("header", { class: "band" }, h("div", { class: "band-inner" },
-        h("div", { class: "brand" }, h("span", { class: "logo-plate" }, h("img", { src: "logo.png", alt: "شعار ثانوية الأندلس" })), h("div", null, (A.settings && A.settings.platform_name) || "التأسيس والتدريب لاختبار القدرات العامة", h("small", null, "لوحة المعلم"))),
+        h("div", { class: "brand" }, h("span", { class: "logo-plate" }, h("img", { src: SCHOOL.logo, alt: SCHOOL.alt, "data-school-logo": true })), h("div", null, (A.settings && A.settings.platform_name) || "التأسيس والتدريب لاختبار القدرات العامة", h("small", null, "لوحة المعلم"))),
         h("div", { class: "spacer" }),
-        h("a", { class: "btn gold sm", href: "index.html?as=" + TEST_ID, target: "_blank", title: "يفتح المنصة بحساب الطالب التجريبي ٠٠٠٠" }, "👁 الدخول كطالب"),
+        h("a", { class: "btn gold sm", href: SCHOOL.cur.page + "?as=" + TEST_ID, target: "_blank", title: "يفتح المنصة بحساب الطالب التجريبي ٠٠٠٠" }, "👁 الدخول كطالب"),
         h("button", { class: "btn ghost sm", onclick: async () => { await sb.auth.signOut(); viewLogin(); } }, "تسجيل الخروج"))),
       h("main", { class: "wrap" },
-        h("nav", { class: "tabsbar", role: "tablist" }, TABS.map(([k, t]) =>
+        h("nav", { class: "tabsbar", role: "tablist" }, tabs().map(([k, t]) =>
           h("button", { role: "tab", "aria-selected": String(A.tab === k), onclick: () => { A.tab = k; A.msg = null; render(); } }, t))),
         msgBox(), body));
     const fn = { dashboard: tabDashboard, students: tabStudents, questions: tabQuestions, lectures: tabLectures, results: tabResults, settings: tabSettings }[A.tab];
@@ -158,7 +176,7 @@
         h("div", null, h("h2", { style: "margin:0" }, "👁 حساب الطالب التجريبي (٠٠٠٠)"),
           h("p", { class: "small muted", style: "margin:4px 0 0" }, "حسابك لتجربة المنصة كما يراها الطالب. نتائجه هنا فقط، ولا تدخل في إحصاءات الطلاب ولا في تبويب النتائج.")),
         h("div", { class: "row" },
-          h("a", { class: "btn gold", href: "index.html?as=" + TEST_ID, target: "_blank" }, "الدخول كطالب"),
+          h("a", { class: "btn gold", href: SCHOOL.cur.page + "?as=" + TEST_ID, target: "_blank" }, "الدخول كطالب"),
           h("button", { class: "btn ghost", onclick: async () => {
             if (!confirm("تصفير حساب الطالب التجريبي؟ تُحذف محاولاته ومشاهداته.")) return;
             try { await resetStudent(TEST_ID, true); flash("ok", "تم تصفير حساب الطالب التجريبي."); } catch (e) { flash("err", e.message); }
@@ -277,11 +295,8 @@
       h("div", { class: "row" },
         h("button", { class: "btn", disabled: !uniq.length, onclick: async e => {
           e.target.disabled = true; e.target.textContent = "جارٍ الاستيراد…";
-          for (let i = 0; i < uniq.length; i += 500) {
-            const { error } = await sb.from("students").upsert(uniq.slice(i, i + 500), { onConflict: "national_id" });
-            if (error) return flash("err", "توقف الاستيراد: " + error.message);
-          }
-          A.importPreview = null; flash("ok", `تم استيراد ${uniq.length} طالبًا.`);
+          let r; try { r = await upsertStudents(uniq); } catch (err) { return flash("err", "توقف الاستيراد: " + err.message); }
+          A.importPreview = null; flash(r.foreign.length ? "info" : "ok", importMsg(r));
         } }, `استيراد ${uniq.length} طالبًا`),
         h("button", { class: "btn ghost", onclick: () => { A.importPreview = null; render(); } }, "إلغاء")));
   }
@@ -300,11 +315,8 @@
       h("div", { class: "row" },
         h("button", { class: "btn", onclick: async e => {
           e.target.disabled = true; e.target.textContent = "جارٍ الاستيراد…";
-          for (let i = 0; i < recs.length; i += 500) {
-            const { error } = await sb.from("students").upsert(recs.slice(i, i + 500), { onConflict: "national_id" });
-            if (error) return flash("err", "توقف الاستيراد: " + error.message);
-          }
-          A.pdfStudents = null; flash("ok", `تم استيراد ${recs.length} طالبًا من ملف PDF.`);
+          let r; try { r = await upsertStudents(recs); } catch (err) { return flash("err", "توقف الاستيراد: " + err.message); }
+          A.pdfStudents = null; flash(r.foreign.length ? "info" : "ok", importMsg(r, " من ملف PDF"));
         } }, `استيراد ${recs.length} طالبًا`),
         h("button", { class: "btn ghost", onclick: () => { A.pdfStudents = null; render(); } }, "إلغاء")));
   }

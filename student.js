@@ -23,7 +23,9 @@
     get: k => { try { return sessionStorage.getItem(k); } catch { return null; } },
     set: (k, v) => { try { v == null ? sessionStorage.removeItem(k) : sessionStorage.setItem(k, v); } catch {} }
   };
-  const settings = () => (S.data && S.data.settings) || S.pub || { pass_mark: 70, questions_per_quiz: 10, platform_name: "التأسيس والتدريب لاختبار القدرات العامة", access_mode: "pass", school_name: "ثانوية الأندلس بترقش", course_name: "تأسيس القدرات — القسم الكمي" };
+  const settings0 = () => (S.data && S.data.settings) || S.pub || { pass_mark: 70, questions_per_quiz: 10, platform_name: "التأسيس والتدريب لاختبار القدرات العامة", access_mode: "pass", school_name: "ثانوية الأندلس بترقش", course_name: "تأسيس القدرات — القسم الكمي" };
+  // اسم المدرسة: الأندلس من الإعدادات، وبقية المدارس من school.js
+  const settings = () => { const s = settings0(); return SCHOOL.key === "andalus" ? s : { ...s, school_name: SCHOOL.name }; };
   function lectures() {
     let prevDone = true;
     return (S.data?.lectures || []).map(l => {
@@ -54,7 +56,7 @@
         S.data && h("span", { class: "who" }, S.data.student.full_name),
         S.data && h("button", { class: "btn ghost sm", onclick: logout }, "تسجيل الخروج")))].filter(Boolean);
   }
-  function logout() { ss.set("andalus-nid", null); ss.set("andalus-sid", null); clearInterval(pingTimer); Object.assign(S, { nid: null, data: null, quiz: null, result: null }); go("login"); }
+  function logout() { if (window.SCHOOL_KEY) SCHOOL.set(window.SCHOOL_KEY); ss.set("andalus-nid", null); ss.set("andalus-sid", null); clearInterval(pingTimer); Object.assign(S, { nid: null, data: null, quiz: null, result: null }); go("login"); }
 
   // ---------- الدخول ----------
   function viewLogin() {
@@ -93,7 +95,7 @@
     return hh ? `${AR(hh)} س ${AR(mm)} د` : mm ? `${AR(mm)} دقيقة` : sec ? "أقل من دقيقة" : `${AR(0)} د`; };
   const pct = v => v == null ? "—" : AR(v) + "٪";
   const MARK = '<svg viewBox="0 0 48 48" aria-hidden="true"><path d="M24 3l6.2 14.8L45 24l-14.8 6.2L24 45l-6.2-14.8L3 24l14.8-6.2z" fill="currentColor"/><rect x="15" y="15" width="18" height="18" transform="rotate(45 24 24)" fill="none" stroke="var(--tile-deep)" stroke-width="2.4"/></svg>';
-  function mark() { return h("span", { class: "logo-plate" }, h("img", { src: "logo.png", alt: "شعار ثانوية الأندلس" })); }
+  function mark() { return h("span", { class: "logo-plate" }, h("img", { src: SCHOOL.logo, alt: SCHOOL.alt, "data-school-logo": true })); }
 
   const SECTIONS = {
     quant: { name: "القسم الكمي", icon: "∑", desc: "الحساب والجبر والهندسة والإحصاء وحل المسائل", tone: "q" },
@@ -148,7 +150,7 @@
     };
     return [band(), h("main", { class: "wrap" },
       h("section", { class: "hero hero-home" },
-        h("span", { class: "hero-logo" }, h("img", { src: "logo.png", alt: "شعار ثانوية الأندلس" })),
+        h("span", { class: "hero-logo" }, h("img", { src: SCHOOL.logo, alt: SCHOOL.alt, "data-school-logo": true })),
         h("div", { class: "hero-text" },
           h("p", { class: "eyebrow" }, settings().school_name),
           h("h1", null, `مرحبًا ${first} 👋`),
@@ -213,7 +215,7 @@
     return [band(), h("main", { class: "wrap" },
       h("div", { class: "row", style: "margin-bottom:14px" }, h("button", { class: "btn ghost sm", onclick: () => go("home") }, "→ الصفحة الرئيسية")),
       h("section", { class: "hero " + sec.tone },
-        h("span", { class: "hero-logo" }, h("img", { src: "logo.png", alt: "شعار ثانوية الأندلس" })),
+        h("span", { class: "hero-logo" }, h("img", { src: SCHOOL.logo, alt: SCHOOL.alt, "data-school-logo": true })),
         h("div", { class: "hero-text" },
           h("p", { class: "eyebrow" }, settings().platform_name),
           h("h1", { class: "sec-title" }, svgSpan("sec-icon sm", SEC_ICON[key]), sec.name),
