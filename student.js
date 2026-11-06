@@ -1,6 +1,7 @@
 (function () {
   const app = document.getElementById("app");
-  const TEST_ID = "0000"; const UNIT = 5; // عدد المحاضرات في كل وحدة const isTest = () => S.nid === TEST_ID;
+  const TEST_ID = "0000"; const UNIT = { quant: 5, verbal: 2 }; // عدد المحاضرات في كل وحدة لكل قسم
+  const isTest = () => S.nid === TEST_ID;
 
   const LETTERS = ["أ", "ب", "ج", "د", "هـ", "و"];
   const S = { nid: null, data: null, view: "login", lid: null, part: 0, quiz: null, result: null, error: "", busy: false };
@@ -183,7 +184,7 @@
     const f = S.filter || "all";
     const shown = ls.filter(l => f === "all" || (f === "open" && l.state === "open" && !l.done) || (f === "done" && l.done));
     const groups = [];
-    for (const l of shown) { const g = Math.floor((num(l) - 1) / UNIT); (groups[g] ||= []).push(l); }
+    for (const l of shown) { const g = Math.floor((num(l) - 1) / (UNIT[key] || 5)); (groups[g] ||= []).push(l); }
     const ACCESS = { open: "جميع المحاضرات مفتوحة لك.", watch: "تُفتح كل محاضرة بعد مشاهدة التي قبلها.", pass: `تُفتح كل محاضرة بعد اجتياز اختبار التي قبلها بنسبة ${AR(settings().pass_mark)}٪.` };
     const card = l => {
       const pos = Math.max(0, ...Object.values(l.positions || { 0: 0 }));
