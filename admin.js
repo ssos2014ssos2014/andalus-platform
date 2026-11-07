@@ -100,7 +100,7 @@
   }
 
   // ---------- الإطار ----------
-  const TABS = [["dashboard", "لوحة المؤشرات"], ["students", "الطلاب"], ["certs", "🏅 الشهادات"], ["questions", "الأسئلة"], ["lectures", "المحاضرات"], ["results", "النتائج"], ["settings", "الإعدادات"]];
+  const TABS = [["dashboard", "لوحة المؤشرات"], ["students", "الطلاب"], ["certs", "🏅 الشهادات"], ["ctests", "🧪 إنشاء اختبار"], ["questions", "الأسئلة"], ["lectures", "المحاضرات"], ["results", "النتائج"], ["settings", "الإعدادات"]];
   async function render() {
     const body = h("div", null, h("div", { class: "loading" }, "جارٍ التحميل…"));
     app.replaceChildren(
@@ -113,7 +113,7 @@
         h("nav", { class: "tabsbar", role: "tablist" }, TABS.map(([k, t]) =>
           h("button", { role: "tab", "aria-selected": String(A.tab === k), onclick: () => { A.tab = k; A.msg = null; render(); } }, t))),
         msgBox(), body));
-    const fn = { dashboard: tabDashboard, students: tabStudents, certs: tabCerts, questions: tabQuestions, lectures: tabLectures, results: tabResults, settings: tabSettings }[A.tab];
+    const fn = { dashboard: tabDashboard, students: tabStudents, certs: tabCerts, ctests: tabCtests, questions: tabQuestions, lectures: tabLectures, results: tabResults, settings: tabSettings }[A.tab];
     try { body.replaceChildren(...[await fn()].flat()); }
     catch (e) { body.replaceChildren(h("div", { class: "alert err" }, "تعذر تحميل البيانات: " + e.message)); }
   }
@@ -699,6 +699,137 @@
                 c.students && c.students.phone ? wa(c.students.phone, c.students.full_name, certMsg(c, c.students.full_name)) : null, " · ",
                 h("button", { class: "linkbtn", style: "color:#c0392b", onclick: async () => { if (!confirm("حذف هذه الشهادة من صفحة الطالب؟")) return; const { error } = await sb.from("certificates").delete().eq("id", c.id); if (error) { C.note = { type: "err", text: error.message }; return draw(); } issued.splice(issued.indexOf(c), 1); draw(); } }, "حذف"))))))) : h("p", { class: "muted", style: "margin:0" }, "لم تصدر شهادات بعد.")));
     };
+    draw(); return wrap;
+  }
+
+  // ---------- الاختبارات التي ينشئها المعلم ----------
+  const BASE_URL = () => location.origin + location.pathname.replace(/admin\.html.*$/, "");
+  const examLink = c => `${BASE_URL()}exam.html?c=${c}`, resultLink = c => `${BASE_URL()}exam.html?r=${c}`;
+  const qrSrc = text => { try { if (window.qrcode) { const q = qrcode(0, "M"); q.addData(text); q.make(); return q.createDataURL(6, 8); } } catch {} return `https://api.qrserver.com/v1/create-qr-code/?size=260x260&data=${encodeURIComponent(text)}`; };
+  const newCode = () => Array.from({ length: 6 }, () => "ABCDEFGHJKMNPQRSTUVWXYZ23456789"[Math.floor(Math.random() * 31)]).join("");
+  function printDoc(title, inner) {
+    const w = window.open("", "_blank"); if (!w) return alert("اسمح بالنوافذ المنبثقة للطباعة.");
+    w.document.write(`<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>${CTEST.esc(title)}</title><link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="${BASE_URL()}styles.css"><style>body{background:#fff;font-family:Tajawal,Tahoma,sans-serif;padding:18px 28px;color:#111}h1{font-size:22px;margin:4px 0}h2{font-size:18px;border-bottom:2px solid #1f6f78;padding-bottom:4px;margin-top:22px;page-break-after:avoid}.q{page-break-inside:avoid;margin:10px 0 14px}.q .b{font-weight:600;line-height:1.9}.o{display:grid;grid-template-columns:1fr 1fr;gap:4px 24px;margin:6px 18px 0}.top{display:flex;justify-content:space-between;align-items:center;border-bottom:3px double #c9a54a;padding-bottom:8px}.top img{height:64px}table{border-collapse:collapse;width:100%}td,th{border:1px solid #999;padding:5px 8px;text-align:center}.bub{display:inline-block;width:22px;height:22px;border:1.5px solid #333;border-radius:50%;line-height:20px;margin:0 3px;font-size:12px}@page{size:A4;margin:12mm}</style></head><body>${inner}<script>setTimeout(()=>print(),900)<\/script></body></html>`);
+    w.document.close();
+  }
+  const examHead = (e, sub) => `<div class="top"><div><strong>المملكة العربية السعودية — وزارة التعليم</strong><br>${CTEST.esc(CERT.school(e.school).name)}</div><div style="text-align:center"><h1>${CTEST.esc(e.title)}</h1><div>${sub}</div></div>${e.school === "andalus" ? `<img src="${BASE_URL()}logo.png">` : "<span></span>"}</div><p>اسم ${e.school === "asma" ? "الطالبة" : "الطالب"}: ........................................ &nbsp; رقم الهوية: .......................... &nbsp; رمز الاختبار: <strong>${e.code}</strong></p>`;
+  function printBooklet(e) {
+    const T = CTEST.toHtml, L = CTEST.LETTERS;
+    printDoc(e.title, examHead(e, "كراسة الأسئلة · " + CTEST.LEVELS[e.level]) + e.sections.map(s => `<h2>${CTEST.esc(s.name)} — ${CTEST.AR(s.questions.length)} سؤالًا — الزمن ${CTEST.AR(s.minutes)} دقيقة</h2>` + s.questions.map((q, i) => `<div class="q"><div class="b">${CTEST.AR(i + 1)}) ${T(q.body)}</div><div class="o">${q.options.map((o, j) => `<div>${L[j]}) ${T(o)}</div>`).join("")}</div></div>`).join("")).join(""));
+  }
+  function printKey(e) {
+    const T = CTEST.toHtml, L = CTEST.LETTERS;
+    printDoc("مفتاح " + e.title, examHead(e, "مفتاح الإجابات (للمعلم)").replace(/<p>اسم.*?<\/p>/, "") + e.sections.map(s => `<h2>${CTEST.esc(s.name)}</h2><table><tr>${s.questions.map((q, i) => `<td><b>${CTEST.AR(i + 1)}</b><br>${L[q.correct]}</td>`).join("")}</tr></table>` + s.questions.map((q, i) => `<div class="q"><div class="b">${CTEST.AR(i + 1)}) ${T(q.body)} <span style="color:#1e8449">← ${L[q.correct]}) ${T(q.options[q.correct])}</span></div><ol style="margin:4px 20px;font-size:14px">${(q.steps || []).map(st => `<li>${T(st)}</li>`).join("")}</ol><div style="font-size:12px;color:#666">المهارة: ${CTEST.esc(q.skill)} · ${CTEST.esc(q.ltitle)}</div></div>`).join("")).join(""));
+  }
+  function printSheet(e) {
+    printDoc("ورقة إجابة " + e.title, examHead(e, "ورقة الإجابة") + e.sections.map(s => `<h2>${CTEST.esc(s.name)}</h2><table>${s.questions.map((q, i) => `<tr><td style="width:50px"><b>${CTEST.AR(i + 1)}</b></td><td>${CTEST.LETTERS.map(l => `<span class="bub">${l}</span>`).join("")}</td></tr>`).join("")}</table>`).join("") + `<p style="margin-top:20px;font-size:13px">ظلّل دائرة واحدة لكل سؤال. للاستعلام عن النتيجة بعد رصدها: ${resultLink(e.code)}</p>`);
+  }
+  async function tabCtests() {
+    const T = A.ct ||= { title: "", delivery: "computer", level: 0, school: "andalus", q: { count: 24, sections: 1, minutes: 25 }, v: { count: 24, sections: 1, minutes: 25 }, sel: new Set(), note: null, open: null };
+    const { data: lecs, error } = await sb.from("lectures").select("id, section, title, topic").order("id");
+    if (error) throw error;
+    const { data: exams, error: e2 } = await sb.from("custom_exams").select("id, code, title, school, delivery, level, sections, is_open, created_at, custom_results(count)").order("created_at", { ascending: false });
+    if (e2) throw new Error(/custom_exams/.test(e2.message) ? "شغّل ملف update-v17.sql في Supabase أولًا." : e2.message);
+    const wrap = h("div");
+    const has = l => !!(window.EXAMS && window.EXAMS[l.id]);
+    const draw = () => {
+      const num = (o, k, min, max) => h("input", { type: "number", min, max, value: o[k], style: "width:90px", onchange: ev => { o[k] = Math.max(min, Math.min(max, +ev.target.value || 0)); draw(); } });
+      const picker = sec => {
+        const ls = lecs.filter(l => (l.section || "quant") === sec), U = sec === "verbal" ? 2 : 5, units = [];
+        ls.forEach((l, i) => { (units[Math.floor(i / U)] ||= []).push(l); });
+        return h("div", { style: "max-height:340px;overflow:auto;border:1px solid #e5e5e5;border-radius:12px;padding:8px" }, units.map((u, ui) => {
+          const usable = u.filter(has), all = usable.length && usable.every(l => T.sel.has(l.id));
+          return h("div", { style: "margin-bottom:8px" },
+            h("label", { style: "font-weight:700;display:flex;gap:6px;align-items:center" + (usable.length ? "" : ";opacity:.5") }, h("input", { type: "checkbox", disabled: !usable.length, checked: !!all, onchange: ev => { usable.forEach(l => ev.target.checked ? T.sel.add(l.id) : T.sel.delete(l.id)); draw(); } }), `الوحدة ${AR(ui + 1)}`),
+            h("div", { style: "display:flex;flex-wrap:wrap;gap:4px 14px;padding-inline-start:22px" }, u.map(l => h("label", { class: "small", style: has(l) ? "" : "opacity:.45", title: has(l) ? l.topic || "" : "لا يوجد بنك أسئلة لهذه المحاضرة بعد" },
+              h("input", { type: "checkbox", disabled: !has(l), checked: T.sel.has(l.id), onchange: ev => { ev.target.checked ? T.sel.add(l.id) : T.sel.delete(l.id); draw(); } }), " " + l.title))));
+        }));
+      };
+      const selQ = lecs.filter(l => T.sel.has(l.id) && (l.section || "quant") === "quant").length, selV = lecs.filter(l => T.sel.has(l.id) && l.section === "verbal").length;
+      const subjBox = (o, name) => h("div", { class: "panel", style: "margin:0;flex:1;min-width:260px" }, h("h3", { style: "margin-top:0" }, name),
+        h("div", { class: "row", style: "gap:10px;flex-wrap:wrap" },
+          h("label", { class: "field" }, h("span", null, "عدد الأسئلة (٠ = بدون)"), num(o, "count", 0, 200)),
+          h("label", { class: "field" }, h("span", null, "عدد الأقسام"), num(o, "sections", 1, 10)),
+          h("label", { class: "field" }, h("span", null, "زمن كل قسم (دقيقة)"), num(o, "minutes", 1, 180))),
+        o.count > 0 && h("p", { class: "small muted", style: "margin:6px 0 0" }, `كل قسم: ${Array.from({ length: o.sections }, (_, i) => AR(Math.floor(o.count / o.sections) + (i < o.count % o.sections ? 1 : 0))).join(" ، ")} سؤالًا`));
+      const openEx = T.open && exams.find(x => x.id === T.open);
+      wrap.replaceChildren(
+        h("section", { class: "panel" },
+          h("h2", null, "🧪 إنشاء اختبار جديد"),
+          T.note && h("div", { class: "alert " + T.note.type }, T.note.text),
+          h("div", { class: "row", style: "gap:12px;flex-wrap:wrap;align-items:end" },
+            h("label", { class: "field", style: "flex:2;min-width:240px" }, h("span", null, "اسم الاختبار"), h("input", { type: "text", value: T.title, placeholder: "مثال: الاختبار التجريبي الأول — الفصل الأول", oninput: ev => T.title = ev.target.value })),
+            h("label", { class: "field" }, h("span", null, "طريقة التقديم"), h("select", { onchange: ev => { T.delivery = ev.target.value; } }, [["computer", "محوسب (رابط وباركود)"], ["paper", "ورقي (كراسة وورقة إجابة)"]].map(([v, t]) => h("option", { value: v, selected: T.delivery === v }, t)))),
+            h("label", { class: "field" }, h("span", null, "مستوى الصعوبة"), h("select", { onchange: ev => { T.level = +ev.target.value; } }, CTEST.LEVELS.map((t, i) => h("option", { value: i, selected: T.level === i }, t)))),
+            h("label", { class: "field" }, h("span", null, "المدرسة"), h("select", { onchange: ev => { T.school = ev.target.value; } }, [["andalus", CERT.SCHOOLS.andalus.name], ["asma", CERT.SCHOOLS.asma.name]].map(([v, t]) => h("option", { value: v, selected: T.school === v }, t))))),
+          h("p", { class: "small muted" }, "المستوى الأساسي يطابق صعوبة أسئلة المحاضرات، وكل مستوى أعلى يرفع صعوبة الأرقام والحسابات في الكمي، ويزيد نسبة أسئلة الفهم والاستنتاج والخطأ السياقي في اللفظي. الأسئلة تُولَّد جديدة في كل مرة، فلا تطابق أسئلة المحاضرات ولا أمثلتها."),
+          h("div", { class: "row", style: "gap:12px;flex-wrap:wrap;margin:10px 0" }, subjBox(T.q, "📐 الكمي"), subjBox(T.v, "📖 اللفظي")),
+          h("div", { class: "row", style: "gap:12px;flex-wrap:wrap" },
+            h("div", { style: "flex:1;min-width:280px" }, h("h3", null, `المحاضرات الكمية (المحدد ${AR(selQ)})`), picker("quant")),
+            h("div", { style: "flex:1;min-width:280px" }, h("h3", null, `المحاضرات اللفظية (المحدد ${AR(selV)})`), picker("verbal"))),
+          h("button", { class: "btn gold", style: "margin-top:14px", onclick: async ev => {
+            if (!T.title.trim()) return (T.note = { type: "err", text: "اكتب اسم الاختبار." }, draw());
+            if (T.q.count > 0 && !selQ) return (T.note = { type: "err", text: "اختر محاضرة كمية واحدة على الأقل، أو اجعل عدد أسئلة الكمي صفرًا." }, draw());
+            if (T.v.count > 0 && !selV) return (T.note = { type: "err", text: "اختر محاضرة لفظية واحدة على الأقل، أو اجعل عدد أسئلة اللفظي صفرًا." }, draw());
+            if (!(T.q.count + T.v.count)) return (T.note = { type: "err", text: "حدد عدد الأسئلة." }, draw());
+            ev.target.disabled = true; ev.target.textContent = "جارٍ توليد الأسئلة…"; await new Promise(r => setTimeout(r, 30));
+            try {
+              const sections = CTEST.generate({ level: T.level, lectures: lecs.filter(l => T.sel.has(l.id)), quant: T.q, verbal: T.v, seed: (Date.now() ^ (Math.random() * 1e9)) >>> 0 });
+              const rec = { code: newCode(), title: T.title.trim(), school: T.school, delivery: T.delivery, level: T.level, config: { quant: T.q, verbal: T.v, lectures: [...T.sel] }, sections };
+              const { data, error } = await sb.from("custom_exams").insert(rec).select("id").single(); if (error) throw error;
+              T.note = { type: "ok", text: `✓ أُنشئ الاختبار «${rec.title}» برمز ${rec.code}، وفيه ${AR(sections.reduce((t, s) => t + s.questions.length, 0))} سؤالًا.` };
+              T.open = data.id; A.msg = null; render();
+            } catch (er) { T.note = { type: "err", text: er.message }; draw(); }
+          } }, "✨ إنشاء الاختبار")),
+        openEx ? ctestCard(openEx, true) : null,
+        h("section", { class: "panel" }, h("h2", null, "الاختبارات المنشأة"),
+          exams.length ? h("div", { class: "table-wrap" }, h("table", null,
+            h("thead", null, h("tr", null, h("th", null, "الاختبار"), h("th", null, "الرمز"), h("th", null, "النوع"), h("th", null, "المستوى"), h("th", null, "الأسئلة"), h("th", null, "النتائج"), h("th", null, "الحالة"), h("th", null, ""))),
+            h("tbody", null, exams.map(x => h("tr", null, h("td", null, x.title), h("td", null, h("strong", null, x.code)), h("td", null, x.delivery === "paper" ? "ورقي" : "محوسب"), h("td", { class: "small" }, x.level ? "المستوى " + AR(x.level) : "الأساسي"),
+              h("td", null, AR(x.sections.reduce((t, s) => t + s.questions.length, 0))), h("td", null, AR((x.custom_results && x.custom_results[0] && x.custom_results[0].count) || 0)),
+              h("td", null, h("button", { class: "linkbtn", onclick: async () => { const { error } = await sb.from("custom_exams").update({ is_open: !x.is_open }).eq("id", x.id); if (!error) { x.is_open = !x.is_open; draw(); } } }, x.is_open ? "🟢 مفتوح" : "🔴 مغلق")),
+              h("td", null, h("button", { class: "btn sm", onclick: () => { T.open = x.id; draw(); window.scrollTo(0, 0); } }, "فتح")))))))
+            : h("p", { class: "muted", style: "margin:0" }, "لم تنشئ اختبارات بعد.")));
+    };
+    function ctestCard(e) {
+      const card = h("section", { class: "panel", style: "border:2px solid #1f6f78" });
+      const res = h("div", null, h("p", { class: "muted" }, "جارٍ تحميل النتائج…"));
+      (async () => {
+        const { data } = await sb.from("custom_results").select("national_id, score, total, percent, source, submitted_at, students(full_name)").eq("exam_id", e.id).order("percent", { ascending: false });
+        res.replaceChildren((data || []).length ? h("div", { class: "table-wrap" }, h("table", null, h("thead", null, h("tr", null, h("th", null, "الطالب"), h("th", null, "الدرجة"), h("th", null, "النسبة"), h("th", null, "المصدر"), h("th", null, ""))),
+          h("tbody", null, data.map(r => h("tr", null, h("td", null, r.students ? r.students.full_name : r.national_id), h("td", null, `${AR(r.score)} / ${AR(r.total)}`), h("td", null, AR(r.percent) + "٪"), h("td", { class: "small" }, r.source === "paper" ? "ورقي" : "محوسب"),
+            h("td", null, h("a", { href: `${resultLink(e.code)}&n=${r.national_id}`, target: "_blank", class: "linkbtn" }, "التقرير"))))))) : h("p", { class: "muted", style: "margin:0" }, "لا توجد نتائج بعد."));
+      })();
+      const nid = h("input", { type: "text", placeholder: "رقم الهوية", style: "width:150px" });
+      const ans = e.sections.map(s => h("input", { type: "text", placeholder: `${s.name}: ${AR(s.questions.length)} حرفًا مثل أبجد…`, style: "width:100%;margin-top:6px" }));
+      card.append(
+        h("div", { class: "row", style: "justify-content:space-between;align-items:center" }, h("h2", { style: "margin:0" }, `📄 ${e.title}`), h("button", { class: "btn ghost sm", onclick: () => { A.ct.open = null; render(); } }, "إغلاق")),
+        h("p", { class: "small muted" }, `الرمز ${e.code} · ${e.delivery === "paper" ? "ورقي" : "محوسب"} · ${CTEST.LEVELS[e.level]} · ${e.sections.map(s => `${s.name}: ${AR(s.questions.length)} سؤالًا / ${AR(s.minutes)} د`).join(" · ")}`),
+        h("div", { class: "row", style: "gap:8px;flex-wrap:wrap" },
+          h("button", { class: "btn", onclick: () => printBooklet(e) }, "🖨 ملف الأسئلة كاملًا"),
+          h("button", { class: "btn ghost", onclick: () => printKey(e) }, "🔑 مفتاح الإجابات مع الحلول"),
+          h("button", { class: "btn ghost", onclick: () => printSheet(e) }, "🗒 ورقة إجابة (للورقي)"),
+          h("button", { class: "linkbtn", style: "color:#c0392b", onclick: async () => { if (!confirm("حذف الاختبار ونتائجه نهائيًا؟")) return; await sb.from("custom_exams").delete().eq("id", e.id); A.ct.open = null; render(); } }, "حذف الاختبار")),
+        h("div", { class: "row", style: "gap:18px;flex-wrap:wrap;margin-top:14px" },
+          e.delivery === "computer" && h("div", { style: "text-align:center" }, h("strong", null, "باركود دخول الاختبار المحوسب"), h("br"), h("img", { src: qrSrc(examLink(e.code)), alt: "QR", style: "width:180px;height:180px;margin:6px 0" }), h("br"),
+            h("a", { href: examLink(e.code), target: "_blank", class: "small", style: "direction:ltr;display:inline-block" }, examLink(e.code)), h("br"),
+            h("button", { class: "btn sm ghost", onclick: () => navigator.clipboard && navigator.clipboard.writeText(examLink(e.code)) }, "نسخ الرابط")),
+          h("div", { style: "text-align:center" }, h("strong", null, "رابط الاستعلام عن النتيجة (برقم الهوية)"), h("br"), h("img", { src: qrSrc(resultLink(e.code)), alt: "QR", style: "width:180px;height:180px;margin:6px 0" }), h("br"),
+            h("a", { href: resultLink(e.code), target: "_blank", class: "small", style: "direction:ltr;display:inline-block" }, resultLink(e.code)), h("br"),
+            h("button", { class: "btn sm ghost", onclick: () => navigator.clipboard && navigator.clipboard.writeText(resultLink(e.code)) }, "نسخ الرابط"))),
+        h("h3", null, "رصد إجابات ورقية"),
+        h("div", null, nid, ...ans, h("button", { class: "btn sm", style: "margin-top:8px", onclick: async () => {
+          const n = toLatinDigits(nid.value); if (!/^\d{10}$/.test(n)) return alert("رقم الهوية ١٠ أرقام.");
+          const answers = e.sections.map((s, i) => { const t = [...ans[i].value.replace(/ـ/g, "").replace(/ا|إ|آ/g, "أ").replace(/ه/g, "د")]; return s.questions.map((_, j) => { const k = CTEST.LETTERS.indexOf(t[j]); return k >= 0 ? k : null; }); });
+          const an = CTEST.analyze(e.sections, answers);
+          const { error } = await sb.from("custom_results").upsert({ exam_id: e.id, national_id: n, answers, score: an.score, total: an.total, percent: an.pct, source: "paper" }, { onConflict: "exam_id,national_id" });
+          if (error) return alert(/foreign/.test(error.message) ? "رقم الهوية غير مسجل في المنصة." : error.message);
+          nid.value = ""; ans.forEach(a => a.value = ""); alert(`تم الرصد: ${an.score} من ${an.total} (${an.pct}٪)`); A.ct.open = e.id; render();
+        } }, "رصد الدرجة")),
+        h("p", { class: "small muted" }, "اكتب حروف الإجابات بالترتيب لكل قسم (أ ب ج د)، واترك مسافة أو - للسؤال المتروك."),
+        h("h3", null, "النتائج"), res);
+      return card;
+    }
     draw(); return wrap;
   }
 
