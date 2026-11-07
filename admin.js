@@ -88,6 +88,10 @@
       if (A.school !== SCHOOL.key) return viewWrongSchool(A.school);
     }
     TEST_ID = SCHOOL.test; A.super = A.school === "andalus";
+    // حساب يدير المنصتين وفتحهما معًا: عند الرجوع لأي نافذة تُعاد مدرستها قبل أي عمل، فلا تختلط البيانات
+    if (A.canSwitch && !A.focusHook) { A.focusHook = true;
+      const resync = async () => { if (document.visibilityState !== "visible") return; const { data: i3 } = await sb.rpc("admin_info"); if (i3 && i3.school !== SCHOOL.key) { await sb.rpc("admin_switch_school", { p_school: SCHOOL.key }); render(); } };
+      document.addEventListener("visibilitychange", resync); window.addEventListener("focus", resync); }
     const { data: ls } = await sb.from("lectures").select("*").order("id");
     const { data: st } = await sb.from("settings").select("*").eq("id", 1).single(); A.settings = st || {};
     A.lectures = ls || [];
