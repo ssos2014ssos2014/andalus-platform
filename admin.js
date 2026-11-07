@@ -100,7 +100,7 @@
   }
 
   // ---------- الإطار ----------
-  const TABS = [["dashboard", "لوحة المؤشرات"], ["students", "الطلاب"], ["questions", "الأسئلة"], ["lectures", "المحاضرات"], ["results", "النتائج"], ["settings", "الإعدادات"]];
+  const TABS = [["dashboard", "لوحة المؤشرات"], ["students", "الطلاب"], ["certs", "🏅 الشهادات"], ["questions", "الأسئلة"], ["lectures", "المحاضرات"], ["results", "النتائج"], ["settings", "الإعدادات"]];
   async function render() {
     const body = h("div", null, h("div", { class: "loading" }, "جارٍ التحميل…"));
     app.replaceChildren(
@@ -113,7 +113,7 @@
         h("nav", { class: "tabsbar", role: "tablist" }, TABS.map(([k, t]) =>
           h("button", { role: "tab", "aria-selected": String(A.tab === k), onclick: () => { A.tab = k; A.msg = null; render(); } }, t))),
         msgBox(), body));
-    const fn = { dashboard: tabDashboard, students: tabStudents, questions: tabQuestions, lectures: tabLectures, results: tabResults, settings: tabSettings }[A.tab];
+    const fn = { dashboard: tabDashboard, students: tabStudents, certs: tabCerts, questions: tabQuestions, lectures: tabLectures, results: tabResults, settings: tabSettings }[A.tab];
     try { body.replaceChildren(...[await fn()].flat()); }
     catch (e) { body.replaceChildren(h("div", { class: "alert err" }, "تعذر تحميل البيانات: " + e.message)); }
   }
@@ -605,6 +605,103 @@
   }
 
   // ---------- النتائج ----------
+  // ---------- الشهادات ----------
+  const PLATFORM_URL = () => location.origin + location.pathname.replace(/admin\.html.*$/, "");
+  const intlPhone = p => { p = String(p || "").replace(/\D/g, ""); return p.startsWith("05") ? "966" + p.slice(1) : p.startsWith("5") && p.length === 9 ? "966" + p : p; };
+  function certMsg(c, name) {
+    const sc = CERT.school(c.school), first = (name || "").trim().split(/\s+/)[0];
+    return `السلام عليكم ${first} 🌟\nمبارك! ${sc.female ? "صدرت لكِ" : "صدرت لك"} «${c.title}» من ${sc.name}، تقديرًا ${sc.female ? "لتميّزكِ" : "لتميّزك"} في منصة التأسيس والتدريب لاختبار القدرات العامة.\n${sc.female ? "ادخلي" : "ادخل"} صفحتك في المنصة برقم الهوية لاستعراض الشهادة وتحميلها وطباعتها:\n${PLATFORM_URL()}\n\nمع خالص التهاني 🎉`;
+  }
+  function waQueue(items) {
+    // items: [{ name, phone, text }]
+    const list = items.filter(x => x.phone), skipped = items.length - list.length; let i = 0;
+    const box = h("div", { class: "wa-queue" });
+    const draw = () => {
+      if (i >= list.length) return box.replaceChildren(h("strong", null, `✓ انتهى الإرسال (${AR(list.length)} ${list.length >= 3 && list.length <= 10 ? "رسائل" : "رسالة"}).`), skipped ? h("p", { class: "small muted", style: "margin:6px 0 0" }, `${AR(skipped)} بلا رقم جوال، لم تُرسل لهم.`) : null);
+      const x = list[i];
+      box.replaceChildren(
+        h("div", { class: "row", style: "justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap" },
+          h("div", null, h("strong", null, `الرسالة ${AR(i + 1)} من ${AR(list.length)}: `), x.name, h("span", { class: "muted small" }, " · " + AR(x.phone))),
+          h("div", { class: "row", style: "gap:8px" },
+            h("a", { class: "btn sm", style: "background:#25d366;border-color:#25d366", target: "_blank", rel: "noopener", href: `https://wa.me/${intlPhone(x.phone)}?text=${encodeURIComponent(x.text)}`, onclick: () => setTimeout(() => { i++; draw(); }, 400) }, "إرسال عبر واتساب ←"),
+            h("button", { class: "btn ghost sm", onclick: () => { i++; draw(); } }, "تخطي"))),
+        h("p", { class: "small muted", style: "margin:8px 0 0" }, "يفتح واتساب برسالة جاهزة؛ اضغط «إرسال» هناك ثم عد لهذه الصفحة، فيظهر الطالب التالي تلقائيًا." + (skipped ? ` (${AR(skipped)} بلا رقم جوال سيُتخطّون)` : "")));
+    };
+    draw(); return box;
+  }
+  async function tabCerts() {
+    const C = A.cert ||= { school: "all", kind: "attend", minW: 0, minP: 0, sel: new Set(), q: "", custom: false, text: "", queue: null, note: null };
+    const { data: rows, error } = await sb.rpc("admin_cert_stats");
+    if (error) throw new Error(/admin_cert_stats/.test(error.message) ? "شغّل ملف update-v16.sql في Supabase أولًا." : error.message);
+    const { data: issued } = await sb.from("certificates").select("id, national_id, kind, title, body, school, issued_at, seen_at, stats, students(full_name, phone)").order("issued_at", { ascending: false }).limit(60);
+    const wrap = h("div");
+    const draw = () => {
+      const shown = rows.filter(r => (C.school === "all" || r.school === C.school) && r.watched >= C.minW && r.passed >= C.minP && (!C.q || r.full_name.includes(C.q) || r.national_id.includes(toLatinDigits(C.q))));
+      const selRows = rows.filter(r => C.sel.has(r.national_id));
+      const tplFor = (sc, r) => C.custom && C.text.trim() ? C.text : CERT.KINDS[C.kind].text(CERT.school(sc), r ? { watched: r.watched, passed: r.passed, avg: r.avg_best } : { watched: "{المحاضرات}", passed: "{الاختبارات}", avg: "{المتوسط}" });
+      const fill = (t, r) => t.replace(/\{المحاضرات\}/g, CERT.AR(r.watched)).replace(/\{الاختبارات\}/g, CERT.AR(r.passed)).replace(/\{المتوسط\}/g, CERT.AR(r.avg_best ?? 0));
+      const pv = selRows[0] || shown[0];
+      const prev = h("div", { class: "cert-prev" }); if (pv) prev.innerHTML = CERT.svg({ title: CERT.KINDS[C.kind].title, body: fill(tplFor(pv.school, pv), pv), school: pv.school, issued_at: new Date().toISOString(), id: "00000000", full_name: pv.full_name });
+      const chkAll = h("input", { type: "checkbox", checked: shown.length > 0 && shown.every(r => C.sel.has(r.national_id)), onchange: e => { shown.forEach(r => e.target.checked ? C.sel.add(r.national_id) : C.sel.delete(r.national_id)); draw(); } });
+      const num = (v, f) => h("input", { type: "number", min: 0, value: v, style: "width:80px", onchange: e => { f(Math.max(0, +e.target.value || 0)); draw(); } });
+      wrap.replaceChildren(
+        h("section", { class: "panel" },
+          h("h2", null, "١. نوع الشهادة"),
+          h("div", { class: "row", style: "gap:10px;flex-wrap:wrap" }, Object.entries(CERT.KINDS).map(([k, v]) =>
+            h("label", { class: "chip-opt" + (C.kind === k ? " on" : ""), style: "cursor:pointer;padding:8px 14px;border:1.5px solid " + (C.kind === k ? "#1f6f78" : "#ddd") + ";border-radius:12px;background:" + (C.kind === k ? "#e8f4f5" : "#fff") },
+              h("input", { type: "radio", name: "ck", checked: C.kind === k, onchange: () => { C.kind = k; if (k === "attend" && !C.minW) C.minW = 0; draw(); }, style: "margin-inline-end:6px" }), v.label))),
+          h("label", { class: "row small", style: "gap:6px;margin-top:10px" }, h("input", { type: "checkbox", checked: C.custom, onchange: e => { C.custom = e.target.checked; if (C.custom && !C.text) C.text = tplFor("andalus"); draw(); } }), "تعديل نص الشهادة"),
+          C.custom && h("div", null, h("textarea", { rows: 4, style: "width:100%", oninput: e => { C.text = e.target.value; }, onchange: () => draw() }, C.text),
+            h("p", { class: "small muted", style: "margin:4px 0 0" }, "يمكنك استخدام: {الاسم} {المحاضرات} {الاختبارات} {المتوسط} وتُستبدل تلقائيًا لكل طالب.")),
+          h("h3", { style: "margin:14px 0 6px" }, "معاينة"), pv ? prev : h("p", { class: "muted" }, "حدد طالبًا لمعاينة شهادته.")),
+        h("section", { class: "panel" },
+          h("h2", null, "٢. اختيار الطلاب"),
+          h("div", { class: "row", style: "gap:12px;flex-wrap:wrap;align-items:end" },
+            h("label", { class: "field" }, h("span", null, "المدرسة"), h("select", { onchange: e => { C.school = e.target.value; draw(); } },
+              [["all", "الكل"], ["andalus", CERT.SCHOOLS.andalus.name], ["asma", CERT.SCHOOLS.asma.name]].map(([v, t]) => h("option", { value: v, selected: C.school === v }, t)))),
+            h("label", { class: "field" }, h("span", null, "أقل عدد محاضرات مشاهدة"), num(C.minW, v => C.minW = v)),
+            h("label", { class: "field" }, h("span", null, "أقل عدد اختبارات مجتازة"), num(C.minP, v => C.minP = v)),
+            h("label", { class: "field" }, h("span", null, "بحث"), h("input", { type: "text", value: C.q, placeholder: "الاسم أو الهوية", onchange: e => { C.q = e.target.value.trim(); draw(); } })),
+            h("button", { class: "btn ghost sm", onclick: () => { C.sel = new Set(); draw(); } }, "إلغاء التحديد")),
+          h("p", { class: "small muted" }, `يظهر ${AR(shown.length)} طالبًا، والمحدد ${AR(C.sel.size)}. الترتيب حسب الاختبارات المجتازة ثم المحاضرات.`),
+          h("div", { class: "table-wrap", style: "max-height:420px;overflow:auto" }, h("table", { class: "cert-pick" },
+            h("thead", null, h("tr", null, h("th", null, chkAll), h("th", null, "الاسم"), h("th", null, "المدرسة"), h("th", null, "محاضرات مشاهدة"), h("th", null, "اختبارات مجتازة"), h("th", null, "متوسط أفضل الدرجات"), h("th", null, "شهاداته"), h("th", null, "الجوال"))),
+            h("tbody", null, shown.slice(0, 400).map(r => h("tr", null,
+              h("td", null, h("input", { type: "checkbox", checked: C.sel.has(r.national_id), onchange: e => { e.target.checked ? C.sel.add(r.national_id) : C.sel.delete(r.national_id); draw(); } })),
+              h("td", null, r.full_name), h("td", { class: "small" }, r.school === "asma" ? "أسماء" : "الأندلس"),
+              h("td", null, AR(r.watched)), h("td", null, AR(r.passed)), h("td", null, r.avg_best != null ? AR(r.avg_best) + "٪" : "—"), h("td", null, AR(r.certs)),
+              h("td", { class: "small" }, r.phone ? AR(r.phone) : h("span", { class: "muted" }, "—")))))))),
+        h("section", { class: "panel" },
+          h("h2", null, "٣. الإصدار والإرسال"),
+          C.note && h("div", { class: "alert " + C.note.type }, C.note.text),
+          h("div", { class: "row", style: "gap:10px;flex-wrap:wrap" },
+            h("button", { class: "btn gold", disabled: !C.sel.size, onclick: async e => {
+              if (!confirm(`إصدار «${CERT.KINDS[C.kind].title}» لـ ${AR(C.sel.size)} من الطلاب وإرسالها إلى صفحاتهم؟`)) return;
+              e.target.disabled = true;
+              const recs = selRows.map(r => ({ national_id: r.national_id, kind: C.kind, title: CERT.KINDS[C.kind].title, body: fill(tplFor(r.school, r), r), school: r.school, stats: { watched: r.watched, passed: r.passed, avg: r.avg_best } }));
+              const { data: ins, error } = await sb.from("certificates").insert(recs).select("id, national_id, title, school");
+              if (error) { C.note = { type: "err", text: error.message }; return draw(); }
+              rows.forEach(r => { if (C.sel.has(r.national_id)) r.certs++; });
+              C.queue = ins.map(c => { const r = rows.find(x => x.national_id === c.national_id); return { name: r.full_name, phone: r.phone, text: certMsg(c, r.full_name) }; });
+              C.note = { type: "ok", text: `✓ صدرت ${AR(ins.length)} شهادة، وظهرت في صفحات الطلاب مع إشعار تهنئة عند دخولهم. أرسل لهم رسائل واتساب من الأسفل.` };
+              C.sel = new Set(); draw();
+            } }, `🏅 إصدار الشهادة للمحددين (${AR(C.sel.size)})`)),
+          C.queue && C.queue.length ? waQueue(C.queue) : null),
+        h("section", { class: "panel" },
+          h("h2", null, "الشهادات الصادرة مؤخرًا"),
+          (issued || []).length ? h("div", { class: "table-wrap" }, h("table", null,
+            h("thead", null, h("tr", null, h("th", null, "الطالب"), h("th", null, "الشهادة"), h("th", null, "التاريخ"), h("th", null, "اطّلع عليها"), h("th", null, ""))),
+            h("tbody", null, issued.map(c => h("tr", null,
+              h("td", null, c.students ? c.students.full_name : c.national_id), h("td", null, c.title),
+              h("td", { class: "small" }, CERT.fmtDate(c.issued_at).hij), h("td", null, c.seen_at ? "✓" : "—"),
+              h("td", { style: "white-space:nowrap" },
+                h("button", { class: "linkbtn", onclick: () => { const w = h("div", { class: "cert-modal", onclick: e => { if (e.target === w) w.remove(); } }, h("div", { class: "cert-view" }, (() => { const d = h("div", { class: "cert-art" }); d.innerHTML = CERT.svg({ ...c, full_name: c.students && c.students.full_name }); return d; })(), h("div", { class: "row", style: "justify-content:center;gap:10px;margin-top:10px" }, h("button", { class: "btn", onclick: () => CERT.print({ ...c, full_name: c.students && c.students.full_name }) }, "🖨 طباعة"), h("button", { class: "btn ghost", onclick: () => w.remove() }, "إغلاق")))); document.body.append(w); } }, "عرض"), " · ",
+                c.students && c.students.phone ? wa(c.students.phone, c.students.full_name, certMsg(c, c.students.full_name)) : null, " · ",
+                h("button", { class: "linkbtn", style: "color:#c0392b", onclick: async () => { if (!confirm("حذف هذه الشهادة من صفحة الطالب؟")) return; const { error } = await sb.from("certificates").delete().eq("id", c.id); if (error) { C.note = { type: "err", text: error.message }; return draw(); } issued.splice(issued.indexOf(c), 1); draw(); } }, "حذف"))))))) : h("p", { class: "muted", style: "margin:0" }, "لم تصدر شهادات بعد.")));
+    };
+    draw(); return wrap;
+  }
+
   async function tabResults() {
     const f = h("input", { type: "text", placeholder: "رقم هوية طالب (اختياري)" });
     const ls = h("select", null, h("option", { value: "" }, "كل المحاضرات"), A.lectures.map(l => h("option", { value: String(l.id) }, l.title)));

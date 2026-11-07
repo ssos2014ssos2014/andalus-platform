@@ -683,3 +683,30 @@ sup.ex { font-size: .68em; vertical-align: .6em; line-height: 0; margin-inline-s
 .frc .fn { border-bottom: 1.6px solid currentColor; padding: 0 4px 1px; }
 .frc .fd { padding: 1px 4px 0; }
 .rin .frc { font-size: .85em; }
+
+/* ---------- الشهادات ---------- */
+.cert-entry { display: flex; align-items: center; gap: 14px; width: 100%; margin: 14px 0 4px; padding: 14px 18px; border-radius: 16px; border: 1.5px solid #e2c877; background: linear-gradient(135deg, #fffaf0, #fbf0d2); cursor: pointer; text-align: start; font: inherit; color: inherit; }
+.cert-entry:hover { box-shadow: 0 6px 18px rgba(184,134,43,.18); }
+.cert-entry strong { display: block; font-size: 1.1rem; color: #7a5a12; }
+.cert-entry small { color: #6b7c84; }
+.cert-entry .sec-go { margin-inline-start: auto; color: #7a5a12; font-weight: 700; }
+.cert-ico { font-size: 2rem; line-height: 1; }
+.cert-new { background: #c0392b; color: #fff; border-radius: 99px; padding: 2px 10px; font-size: .8rem; font-weight: 700; animation: pnPulse 1.4s ease-in-out infinite; }
+.cert-list { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
+.cert-card { display: flex; flex-direction: column; gap: 6px; padding: 18px; border-radius: 16px; border: 1.5px solid #e2c877; background: linear-gradient(160deg, #fffdf6, #f6efdc); cursor: pointer; text-align: start; font: inherit; color: inherit; }
+.cert-card .cert-t { font-weight: 800; color: #1f6f78; font-size: 1.05rem; }
+.cert-card .cert-go { color: #7a5a12; font-weight: 700; margin-top: 4px; }
+.cert-modal { position: fixed; inset: 0; z-index: 9999; background: rgba(10,25,32,.62); display: flex; align-items: center; justify-content: center; padding: 16px; overflow: auto; }
+.cert-view { background: #fff; border-radius: 16px; padding: 14px; max-width: 1000px; width: 100%; box-shadow: 0 20px 60px rgba(0,0,0,.35); }
+.cert-art svg { width: 100%; height: auto; display: block; border-radius: 8px; }
+.cert-cele { position: relative; z-index: 2; background: #fff; border-radius: 22px; padding: 28px 26px 22px; max-width: 460px; width: 100%; text-align: center; box-shadow: 0 24px 70px rgba(0,0,0,.4); animation: celePop .55s cubic-bezier(.2,1.4,.4,1); }
+.cert-cele h2 { margin: 8px 0 6px; color: #1f6f78; font-size: 1.6rem; }
+.cele-badge { font-size: 4.2rem; animation: celeSpin 1.6s ease-in-out infinite alternate; }
+.confetti { position: fixed; inset: 0; pointer-events: none; z-index: 1; }
+@keyframes celePop { from { transform: scale(.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+@keyframes celeSpin { from { transform: rotate(-12deg) scale(1); } to { transform: rotate(12deg) scale(1.12); } }
+/* المعلم: الشهادات */
+.cert-pick td, .cert-pick th { white-space: nowrap; }
+.cert-prev { border: 1px solid #e5e5e5; border-radius: 12px; overflow: hidden; background: #fff; }
+.cert-prev svg { width: 100%; height: auto; display: block; }
+.wa-queue { background: #f2fbf5; border: 1.5px solid #9fd7b1; border-radius: 14px; padding: 14px; margin-top: 12px; }

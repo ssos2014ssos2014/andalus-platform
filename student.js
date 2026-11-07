@@ -54,7 +54,7 @@
         S.data && h("span", { class: "who" }, S.data.student.full_name),
         S.data && h("button", { class: "btn ghost sm", onclick: logout }, "تسجيل الخروج")))].filter(Boolean);
   }
-  function logout() { ss.set("andalus-nid", null); ss.set("andalus-sid", null); clearInterval(pingTimer); Object.assign(S, { nid: null, data: null, quiz: null, result: null }); go("login"); }
+  function logout() { ss.set("andalus-nid", null); ss.set("andalus-sid", null); clearInterval(pingTimer); Object.assign(S, { nid: null, data: null, quiz: null, result: null, certs: null, certsFor: null }); go("login"); }
 
   // ---------- الدخول ----------
   function viewLogin() {
@@ -154,6 +154,11 @@
           h("h1", null, `مرحبًا ${first} 👋`),
           h("p", null, "اختر القسم الذي تريد التدرّب عليه، وتابع تقدمك من هنا."))),
       h("div", { class: "sections" }, secCard("quant"), secCard("verbal")),
+      h("button", { class: "cert-entry", onclick: () => go("certs") },
+        h("span", { class: "cert-ico", "aria-hidden": "true" }, "🏅"),
+        h("span", null, h("strong", null, "شهاداتي"), h("small", null, (S.certs || []).length ? `لديك ${AR((S.certs || []).length)} ${(S.certs || []).length >= 3 && (S.certs || []).length <= 10 ? "شهادات" : "شهادة"} محفوظة` : "خزانة شهادات التميّز الخاصة بك")),
+        (S.certs || []).some(c => !c.seen_at) && h("span", { class: "cert-new" }, "جديد"),
+        h("span", { class: "sec-go" }, "افتح ←")),
       h("section", { class: "stats", "aria-label": "إحصاءاتي" },
         tile("مرات الدخول", AR(st.logins || 0)),
         tile("الاختبارات", AR(st.tests || 0), `شاهدت ${AR(watched)} محاضرة`),
@@ -895,12 +900,72 @@
   function fmt(ms) { const s = Math.floor(ms / 1000); return `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`; }
 
   function render() {
-    const views = { login: viewLogin, home: viewHome, section: viewSection, phone: viewPhone, lecture: viewLecture, quiz: viewQuiz, result: viewResult, sim: viewSim, simReview: viewSimReview, simResult: viewSimResult };
+    const views = { login: viewLogin, home: viewHome, certs: viewCerts, section: viewSection, phone: viewPhone, lecture: viewLecture, quiz: viewQuiz, result: viewResult, sim: viewSim, simReview: viewSimReview, simResult: viewSimResult };
     const nodes = (S.data || S.view === "login" ? views[S.view] : viewLogin)();
     app.replaceChildren(...[nodes].flat(3).filter(Boolean));
     if (S.play) mountPlayer();
     if (S.view === "lecture" && document.getElementById("yt-frame")) prepYT();
     if (S.view === "lecture" && document.getElementById("vid")) setupVid();
+    if (S.view === "home" && S.nid && !S.certsFor) loadCerts();
+  }
+  // ---------- الشهادات ----------
+  async function loadCerts() {
+    const nid = S.nid; S.certsFor = nid;
+    try { S.certs = await API.certificates(nid) || []; } catch { S.certs = []; }
+    if (S.nid !== nid) return;
+    if (S.view === "home") render();
+    const fresh = S.certs.filter(c => !c.seen_at);
+    if (fresh.length) { celebrate(fresh); try { await API.certSeen(nid, fresh.map(c => c.id)); } catch {} }
+  }
+  function confetti(host) {
+    const cv = h("canvas", { class: "confetti" }); host.append(cv);
+    const g = cv.getContext("2d"), W = cv.width = innerWidth, H = cv.height = innerHeight;
+    const C = ["#e8c766", "#1f6f78", "#c0392b", "#27ae60", "#8e44ad", "#f39c12", "#2980b9"];
+    const P = Array.from({ length: 170 }, () => ({ x: Math.random() * W, y: -20 - Math.random() * H * .6, r: 4 + Math.random() * 6, c: C[Math.random() * C.length | 0], vx: -1.5 + Math.random() * 3, vy: 2 + Math.random() * 3.5, a: Math.random() * 6, va: -.2 + Math.random() * .4 }));
+    const t0 = performance.now();
+    (function step(t) {
+      g.clearRect(0, 0, W, H);
+      for (const p of P) { p.x += p.vx; p.y += p.vy; p.a += p.va; if (p.y > H + 20 && t - t0 < 3500) { p.y = -20; p.x = Math.random() * W; }
+        g.save(); g.translate(p.x, p.y); g.rotate(p.a); g.fillStyle = p.c; g.fillRect(-p.r, -p.r / 2, p.r * 2, p.r); g.restore(); }
+      if (t - t0 < 6500 && cv.isConnected) requestAnimationFrame(step); else cv.remove();
+    })(t0);
+  }
+  function modal(content, cls) {
+    const box = h("div", { class: "cert-modal " + (cls || ""), role: "dialog", "aria-modal": "true", onclick: e => { if (e.target === box) box.remove(); } }, content);
+    document.body.append(box); return box;
+  }
+  function celebrate(list) {
+    const first = (S.data.student.full_name || "").trim().split(/\s+/)[0], c = list[0];
+    const box = modal(h("div", { class: "cert-cele" },
+      h("div", { class: "cele-badge", "aria-hidden": "true" }, "🏅"),
+      h("h2", null, `مبارك يا ${first}! 🎉`),
+      h("p", null, list.length > 1 ? `حصلت على ${AR(list.length)} شهادات جديدة، آخرها: «${c.title}».` : `حصلت على «${c.title}» من ${CERT.school(c.school).name}.`),
+      h("p", { class: "small muted" }, "شهاداتك محفوظة دائمًا في خزانة «شهاداتي» داخل صفحتك، ويمكنك تحميلها وطباعتها متى شئت."),
+      h("div", { class: "row", style: "justify-content:center;gap:10px;margin-top:14px" },
+        h("button", { class: "btn gold", onclick: () => { box.remove(); showCert(c); } }, "استعرض الشهادة"),
+        h("button", { class: "btn ghost", onclick: () => box.remove() }, "لاحقًا"))), "cele");
+    confetti(box);
+  }
+  function showCert(c) {
+    const art = h("div", { class: "cert-art" }); art.innerHTML = CERT.svg(c);
+    const box = modal(h("div", { class: "cert-view" }, art,
+      h("div", { class: "row", style: "justify-content:center;gap:10px;flex-wrap:wrap;margin-top:12px" },
+        h("button", { class: "btn gold", onclick: async e => { e.target.disabled = true; await CERT.download(c); e.target.disabled = false; } }, "⬇ تحميل صورة"),
+        h("button", { class: "btn", onclick: () => CERT.print(c) }, "🖨 طباعة / حفظ PDF"),
+        h("button", { class: "btn ghost", onclick: () => box.remove() }, "إغلاق"))));
+  }
+  function viewCerts() {
+    const list = S.certs || [];
+    return [band(), h("main", { class: "wrap" },
+      h("button", { class: "btn ghost sm", onclick: () => go("home") }, "→ العودة للرئيسية"),
+      h("section", { class: "hero" }, h("div", { class: "hero-text" }, h("h1", null, "🏅 شهاداتي"), h("p", null, "خزانة شهاداتك: كل شهادة تصلك تُحفظ هنا بتاريخها، ويمكنك عرضها وتحميلها وطباعتها."))),
+      list.length ? h("div", { class: "cert-list" }, list.map(c => { const d = CERT.fmtDate(c.issued_at);
+        return h("button", { class: "cert-card", onclick: () => showCert(c) },
+          h("span", { class: "cert-ico", "aria-hidden": "true" }, "🏅"),
+          h("span", { class: "cert-t" }, c.title),
+          h("span", { class: "small muted" }, `${d.hij} — ${d.gr}`),
+          h("span", { class: "cert-go" }, "عرض الشهادة ←")); }))
+        : h("section", { class: "panel" }, h("p", { class: "muted", style: "margin:0" }, "لا توجد شهادات بعد. واصل حضور المحاضرات واجتياز الاختبارات، وستصلك شهادات التميّز هنا 🌟")))];
   }
   window.addEventListener("beforeunload", e => { if (S.view === "quiz" || S.view === "sim" || S.view === "simReview") { e.preventDefault(); e.returnValue = ""; } });
 

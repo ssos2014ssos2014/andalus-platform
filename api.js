@@ -30,6 +30,8 @@ window.API = (() => {
 
   const liveApi = {
     portal: nid => rpc("student_portal", { p_nid: nid }),
+    certificates: nid => rpc("student_certificates", { p_nid: nid }).catch(() => []),
+    certSeen: (nid, ids) => rpc("cert_seen", { p_nid: nid, p_ids: ids }).catch(() => null),
     markWatched: (nid, lid) => rpc("mark_watched", { p_nid: nid, p_lid: lid }),
     unmarkWatched: (nid, lid) => rpc("unmark_watched", { p_nid: nid, p_lid: lid }),
     startQuiz: (nid, lid) => rpc("start_quiz", { p_nid: nid, p_lid: lid }),
@@ -116,6 +118,11 @@ window.API = (() => {
       Object.assign(a, { submitted: true, percent, passed: percent >= SETTINGS.pass_mark, items: items.map(i => ({ sig: i.sig })) }); save(st);
       return { score, total: items.length, percent, passed: a.passed, pass_mark: SETTINGS.pass_mark };
     },
+    async certificates(nid) {
+      const st = load(), s = DEMO_STUDENTS.find(x => x.national_id === nid);
+      return (st.certs || []).filter(c => c.national_id === nid).map(c => ({ ...c, full_name: s ? s.full_name : "" })).sort((a, b) => b.issued_at.localeCompare(a.issued_at));
+    },
+    async certSeen(nid, ids) { const st = load(); (st.certs || []).forEach(c => { if (c.national_id === nid && ids.includes(c.id) && !c.seen_at) c.seen_at = new Date().toISOString(); }); save(st); },
     async portal(nid) {
       await wait();
       const s = DEMO_STUDENTS.find(x => x.national_id === nid); if (!s) return null;
