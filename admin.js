@@ -30,7 +30,7 @@
       const { error } = await sb.from(t).delete().eq("national_id", nid);
       if (error && !/does not exist/.test(error.message)) throw error;
     }
-    if (clearPhone) { const { error } = await sb.from("students").update({ phone: null }).eq("national_id", nid); if (error) throw error; }
+    if (clearPhone) { const { error } = await sb.from("students").update({ phone: null }).eq("national_id", nid).eq("school", SCHOOL.key); if (error) throw error; }
   }
   let TEST_ID = SCHOOL.test;
   if (SCHOOL.female) startFeminine("admin");
@@ -141,6 +141,7 @@
         h("nav", { class: "tabsbar", role: "tablist" }, TABS.filter(([k]) => A.super || !["questions", "lectures", "settings"].includes(k)).map(([k, t]) =>
           h("button", { role: "tab", "aria-selected": String(A.tab === k), onclick: () => { A.tab = k; A.msg = null; render(); } }, t))),
         msgBox(), body));
+    if (A.canSwitch) { try { await sb.rpc("admin_switch_school", { p_school: SCHOOL.key }); } catch {} }
     const fn = { dashboard: tabDashboard, students: tabStudents, certs: tabCerts, ctests: tabCtests, questions: tabQuestions, lectures: tabLectures, results: tabResults, settings: tabSettings }[A.tab];
     try { body.replaceChildren(...[await fn()].flat()); }
     catch (e) { body.replaceChildren(h("div", { class: "alert err" }, "تعذر تحميل البيانات: " + e.message)); }
@@ -206,11 +207,11 @@
 
   // ---------- الطلاب ----------
   async function tabStudents() {
-    const { count } = await sb.from("students").select("*", { count: "exact", head: true }).neq("national_id", TEST_ID);
+    const { count } = await sb.from("students").select("*", { count: "exact", head: true }).eq("school", SCHOOL.key).neq("national_id", TEST_ID);
     const search = h("input", { type: "text", placeholder: "ابحث بالاسم أو رقم الهوية" });
     const list = h("div");
     async function load() {
-      let q = sb.from("students").select("national_id, full_name, phone, details, student_files(id, title, url, path)").neq("national_id", TEST_ID).order("full_name").limit(100);
+      let q = sb.from("students").select("national_id, full_name, phone, details, student_files(id, title, url, path)").eq("school", SCHOOL.key).neq("national_id", TEST_ID).order("full_name").limit(100);
       const t = search.value.trim();
       if (t) q = q.or(`full_name.ilike.%${t.replace(/[%,()]/g, "")}%,national_id.ilike.%${toLatinDigits(t).replace(/[%,()]/g, "")}%`);
       const { data, error } = await q; if (error) throw error;
@@ -222,7 +223,7 @@
             h("button", { class: "linkbtn", onclick: async () => {
               const v = prompt("رقم جوال الطالب (05xxxxxxxx)، اتركه فارغًا للحذف:", s.phone || ""); if (v == null) return;
               const p = toLatinDigits(v); if (p && !/^05\d{8}$/.test(p)) return flash("err", "رقم الجوال يجب أن يكون 10 أرقام ويبدأ بـ 05.");
-              const { error } = await sb.from("students").update({ phone: p || null }).eq("national_id", s.national_id);
+              const { error } = await sb.from("students").update({ phone: p || null }).eq("national_id", s.national_id).eq("school", SCHOOL.key);
               error ? flash("err", error.message) : flash("ok", "تم حفظ رقم الجوال.");
             } }, "تعديل"))),
           h("td", { class: "small" }, (s.details || []).map(d => `${d.k}: ${d.v}`).join("، ")),
@@ -243,7 +244,7 @@
             try { await resetStudent(s.national_id, true); flash("ok", `تم تصفير ${s.full_name}، وسيُطلب منه رقم الجوال عند دخوله القادم.`); } catch (e) { flash("err", e.message); }
           } }, "تصفير"), " ", h("button", { class: "btn danger sm", onclick: async () => {
             if (!confirm(`حذف الطالب ${s.full_name} ونتائجه؟`)) return;
-            const { error } = await sb.from("students").delete().eq("national_id", s.national_id);
+            const { error } = await sb.from("students").delete().eq("national_id", s.national_id).eq("school", SCHOOL.key);
             error ? flash("err", error.message) : flash("ok", "تم حذف الطالب.");
           } }, "حذف")))))))
         : h("p", { class: "muted" }, t ? "لا توجد نتائج مطابقة." : "لم يُستورد أي طالب بعد. ابدأ برفع ملف الطلاب في الأعلى."));
@@ -351,8 +352,8 @@
           const list = [...files.files]; if (!list.length) return flash("err", "اختر ملفًا واحدًا على الأقل.");
           const one = toLatinDigits(nid.value);
           e.target.disabled = true;
-          const { data: studs } = one ? await sb.from("students").select("national_id").eq("national_id", one)
-            : await sb.from("students").select("national_id").in("national_id", list.map(f => (toLatinDigits(f.name).match(/\d{10}/) || [""])[0]).filter(Boolean));
+          const { data: studs } = one ? await sb.from("students").select("national_id").eq("school", SCHOOL.key).eq("national_id", one)
+            : await sb.from("students").select("national_id").eq("school", SCHOOL.key).in("national_id", list.map(f => (toLatinDigits(f.name).match(/\d{10}/) || [""])[0]).filter(Boolean));
           const known = new Set((studs || []).map(s => s.national_id));
           if (one && !known.has(one)) { e.target.disabled = false; return flash("err", "رقم الهوية غير مسجل في الطلاب."); }
           let done = 0; const skipped = [];
@@ -659,9 +660,9 @@
   }
   async function tabCerts() {
     const C = A.cert ||= { school: "all", kind: "attend", minW: 0, minP: 0, sel: new Set(), q: "", custom: false, text: "", queue: null, note: null };
-    const { data: rows, error } = await sb.rpc("admin_cert_stats");
+    const { data: rows0, error } = await sb.rpc("admin_cert_stats"); const rows = (rows0 || []).filter(r => (r.school || "andalus") === SCHOOL.key);
     if (error) throw new Error(/admin_cert_stats/.test(error.message) ? "شغّل ملف update-v16.sql في Supabase أولًا." : error.message);
-    const { data: issued } = await sb.from("certificates").select("id, national_id, kind, title, body, school, issued_at, seen_at, stats, students(full_name, phone)").order("issued_at", { ascending: false }).limit(60);
+    const { data: issued } = await sb.from("certificates").select("id, national_id, kind, title, body, school, issued_at, seen_at, stats, students(full_name, phone)").eq("school", SCHOOL.key).order("issued_at", { ascending: false }).limit(60);
     const wrap = h("div");
     const draw = () => {
       const shown = rows.filter(r => (C.school === "all" || r.school === C.school) && r.watched >= C.minW && r.passed >= C.minP && (!C.q || r.full_name.includes(C.q) || r.national_id.includes(toLatinDigits(C.q))));
@@ -756,7 +757,7 @@
     const T = A.ct ||= { title: "", delivery: "computer", level: 0, school: "andalus", q: { count: 24, sections: 1, minutes: 25 }, v: { count: 24, sections: 1, minutes: 25 }, sel: new Set(), note: null, open: null };
     const { data: lecs, error } = await sb.from("lectures").select("id, section, title, topic").order("id");
     if (error) throw error;
-    const { data: exams, error: e2 } = await sb.from("custom_exams").select("id, code, title, school, delivery, level, sections, is_open, created_at, custom_results(count)").order("created_at", { ascending: false });
+    const { data: exams, error: e2 } = await sb.from("custom_exams").select("id, code, title, school, delivery, level, sections, is_open, created_at, custom_results(count)").eq("school", SCHOOL.key).order("created_at", { ascending: false });
     if (e2) throw new Error(/custom_exams/.test(e2.message) ? "شغّل ملف update-v17.sql في Supabase أولًا." : e2.message);
     const wrap = h("div");
     const has = l => !!(window.EXAMS && window.EXAMS[l.id]);
@@ -867,7 +868,7 @@
     const out = h("div");
     let rows = [];
     async function load() {
-      let q = sb.from("attempts").select("id, submitted_at, national_id, lecture_id, score, total, percent, passed, students(full_name, phone)").neq("national_id", TEST_ID)
+      let q = sb.from("attempts").select("id, submitted_at, national_id, lecture_id, score, total, percent, passed, students!inner(full_name, phone, school)").eq("students.school", SCHOOL.key).neq("national_id", TEST_ID)
         .not("submitted_at", "is", null).order("submitted_at", { ascending: false }).limit(1000);
       if (f.value.trim()) q = q.eq("national_id", toLatinDigits(f.value));
       if (ls.value) q = q.eq("lecture_id", +ls.value);
