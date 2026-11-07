@@ -5,7 +5,7 @@
   const SCHOOLS = {
     andalus: { name: "ثانوية الأندلس بترقش", female: false, logo: "logo.png",
       sign: [["مدير المدرسة", "أ. عبدالعزيز بن عبده الألمعي"], ["مشرف المنصة", "أ. أحمد بن علي موسى المشيبي"], ["وكيل المدرسة", "أ. علي بن جابر الألمعي"]] },
-    asma: { name: "ثانوية أسماء بنت أبي بكر", female: true, logo: null,
+    asma: { name: "ثانوية أسماء بنت أبي بكر بمحايل عسير", female: true, logo: "logo-asma.png", lw: 176,
       sign: [["مديرة المدرسة", "أ. شمعة محمد عمر"], ["مشرفة المنصة", "أ. عبدية علي موسى الدارسي"]] }
   };
   const KINDS = {
@@ -32,7 +32,7 @@
       return `<text x="${x}" y="660" text-anchor="middle" font-size="19" fill="#7a5a12" font-weight="700">${esc(role)}</text>
         <line x1="${x - 110}" y1="700" x2="${x + 110}" y2="700" stroke="#c9a54a" stroke-width="1.2" stroke-dasharray="4 4"/>
         <text x="${x}" y="728" text-anchor="middle" font-size="19" fill="#173a4a" font-weight="700">${esc(name)}</text>`; }).join("");
-    const emblem = logo ? `<image href="${esc(logo)}" x="${W / 2 - 52}" y="52" width="104" height="104" preserveAspectRatio="xMidYMid meet"/>`
+    const lw = s.lw || 104, emblem = logo ? `<image href="${esc(logo)}" x="${W / 2 - lw / 2}" y="52" width="${lw}" height="108" preserveAspectRatio="xMidYMid meet"/>`
       : `<g transform="translate(${W / 2},104)"><circle r="50" fill="#fff" stroke="#c9a54a" stroke-width="3"/><circle r="41" fill="none" stroke="#1f6f78" stroke-width="1.5"/><text y="14" text-anchor="middle" font-size="40" fill="#1f6f78" font-weight="800">أ</text></g>`;
     return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" direction="rtl" font-family="Tajawal, 'Noto Kufi Arabic', 'Segoe UI', Tahoma, Arial, sans-serif">
   <defs>
@@ -66,7 +66,7 @@
     try { const b = await (await fetch(src)).blob(); logoData = await new Promise(r => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.readAsDataURL(b); }); return logoData; } catch { return null; }
   }
   async function toPng(c) {
-    const s = school(c.school), href = s.logo ? await logoDataUrl(s.logo) : null;
+    const s = school(c.school), href = s.logo ? await logoDataUrl(s.logo) : null; logoData = null;
     const str = svg(c, s.logo ? (href || "") : null), img = new Image();
     const url = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(str);
     await new Promise((ok, no) => { img.onload = ok; img.onerror = no; img.src = url; });

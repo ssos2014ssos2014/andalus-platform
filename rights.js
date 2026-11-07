@@ -2,6 +2,13 @@
 (() => {
   const SIG = "c1bb487a7eaf000a5230399842979fa3966033e1f444041335c769c11e29e28f";
   const SIGTXT = "أحمد علي موسى المشيبي | معلم اللغة الإنجليزية | علي جابر علي الألمعي | وكيل الشؤون التعليمية | ثانوية الأندلس بترقش | 1447هـ / 2026م";
+  const SC = window.SCHOOL || { key: "andalus", name: "ثانوية الأندلس بترقش", short: "ثانوية الأندلس", region: "ثانوية الأندلس بترقش — منطقة عسير", logo: "logo.png" };
+  const ASMA = SC.key === "asma";
+  const PEOPLE = ASMA ? `<div class="ip-p"><span class="ip-av">ع</span><em>إشراف المنصة</em><b>أ. عبدية علي موسى الدارسي</b><span>مشرفة المنصة</span></div>`
+    : `<div class="ip-p"><span class="ip-av">أ</span><em>فكرة وتنفيذ</em><b>أ. أحمد علي موسى المشيبي</b><span>معلم اللغة الإنجليزية</span></div>
+            <div class="ip-p"><span class="ip-av">ع</span><b>أ. علي جابر علي الألمعي</b><span>وكيل الشؤون التعليمية</span></div>`;
+  const TBL = ASMA ? `<div><dt>إشراف المنصة</dt><dd>أ. عبدية علي موسى الدارسي</dd></div>`
+    : `<div><dt>فكرة وتنفيذ</dt><dd>معلم اللغة الإنجليزية أ. أحمد علي موسى المشيبي<br>وكيل الشؤون التعليمية أ. علي جابر علي الألمعي</dd></div>`;
   const el = (t, c, html) => { const e = document.createElement(t); if (c) e.className = c; if (html != null) e.innerHTML = html; return e; };
   function open() {
     if (document.getElementById("ip-modal")) return;
@@ -15,14 +22,13 @@
         </div>
         <div class="ip-body">
           <div class="ip-people">
-            <img src="logo.png" alt="شعار ثانوية الأندلس" class="ip-logo">
-            <div class="ip-p"><span class="ip-av">أ</span><em>فكرة وتنفيذ</em><b>أ. أحمد علي موسى المشيبي</b><span>معلم اللغة الإنجليزية</span></div>
-            <div class="ip-p"><span class="ip-av">ع</span><b>أ. علي جابر علي الألمعي</b><span>وكيل الشؤون التعليمية</span></div>
-            <p class="ip-school">ثانوية الأندلس بترقش — منطقة عسير</p>
+            <img src="${SC.logo}" alt="شعار ${SC.short}" class="ip-logo">
+            ${PEOPLE}
+            <p class="ip-school">${SC.region}</p>
           </div>
           <dl class="ip-tbl">
             <div><dt>اسم النظام</dt><dd>منصة التأسيس والتدريب لاختبار القدرات العامة</dd></div>
-            <div><dt>فكرة وتنفيذ</dt><dd>معلم اللغة الإنجليزية أ. أحمد علي موسى المشيبي<br>وكيل الشؤون التعليمية أ. علي جابر علي الألمعي</dd></div>
+            ${TBL}
             <div><dt>سنة الإنشاء</dt><dd>١٤٤٧هـ / ٢٠٢٦م</dd></div>
             <div><dt>الإصدار</dt><dd>١.٠ — رؤية ٢٠٣٠</dd></div>
           </dl>
@@ -42,7 +48,7 @@
   function footer() {
     if (document.getElementById("ip-foot")) return;
     const f = el("footer", "ip-foot"); f.id = "ip-foot";
-    f.innerHTML = `<img src="logo.png" alt="" aria-hidden="true"><span>© ١٤٤٧هـ ثانوية الأندلس بترقش — جميع الحقوق محفوظة</span><button type="button">🛡 حقوق الملكية الفكرية</button>`;
+    f.innerHTML = `<img src="${SC.logo}" alt="" aria-hidden="true"><span>© ١٤٤٧هـ ${SC.name} — جميع الحقوق محفوظة</span><button type="button">🛡 حقوق الملكية الفكرية</button>`;
     f.querySelector("button").onclick = open;
     document.body.append(f);
   }

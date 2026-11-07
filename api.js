@@ -28,8 +28,9 @@ window.API = (() => {
     return data;
   }
 
+  const SCH = {};
   const liveApi = {
-    portal: nid => rpc("student_portal", { p_nid: nid }),
+    portal: async nid => { const d = await rpc("student_portal", { p_nid: nid }); if (d && d.student && !d.student.school) { SCH[nid] ||= await rpc("student_school", { p_nid: nid }).catch(() => "andalus"); d.student.school = SCH[nid] || "andalus"; } return d; },
     certificates: nid => rpc("student_certificates", { p_nid: nid }).catch(() => []),
     certSeen: (nid, ids) => rpc("cert_seen", { p_nid: nid, p_ids: ids }).catch(() => null),
     markWatched: (nid, lid) => rpc("mark_watched", { p_nid: nid, p_lid: lid }),
@@ -51,6 +52,8 @@ window.API = (() => {
     { national_id: "1111111111", full_name: "عبدالله محمد الشهري",
       details: [{ k: "الصف", v: "الثالث الثانوي" }, { k: "الفصل", v: "3/2" }, { k: "رقم الجوال", v: "05xxxxxxxx" }, { k: "المسار", v: "عام" }] },
     { national_id: "0000", full_name: "طالب تجريبي (حساب المعلم)", details: [{ k: "ملاحظة", v: "حساب تجربة لا يدخل في إحصاءات الطلاب" }] },
+    { national_id: "2222222222", full_name: "سارة علي القحطاني", school: "asma", details: [{ k: "الصف", v: "الثالث الثانوي" }] },
+    { national_id: "0001", full_name: "طالبة تجريبية (حساب المعلمة)", school: "asma", details: [{ k: "ملاحظة", v: "حساب تجربة لا يدخل في إحصاءات الطالبات" }] },
     { national_id: "2222222222", full_name: "فيصل أحمد القحطاني",
       details: [{ k: "الصف", v: "الثاني الثانوي" }, { k: "الفصل", v: "2/1" }] }
   ];
@@ -131,7 +134,7 @@ window.API = (() => {
       const ses = (st.sessions || []).filter(x => x.nid === nid);
       const stats = { logins: ses.length, seconds: ses.reduce((t, x) => t + x.seconds, 0), tests: mine.length,
         max: mine.length ? Math.max(...mine) : null, min: mine.length ? Math.min(...mine) : null, avg: mine.length ? Math.round(mine.reduce((a, b) => a + b, 0) / mine.length) : null };
-      return { student: { ...s, phone: (st.phones || {})[nid] || null }, stats, files: [], settings: SETTINGS, lectures: window.LECTURES.map(l => {
+      return { student: { ...s, school: s.school || "andalus", phone: (st.phones || {})[nid] || null }, stats, files: [], settings: SETTINGS, lectures: window.LECTURES.map(l => {
         const mine = st.attempts.filter(a => a.nid === nid && a.lid === l.id && a.submitted);
         return { ...l, section: l.section || "quant", durations: (st.dur || {})[nid + ":" + l.id] || {}, positions: (st.pos || {})[nid + ":" + l.id] || {}, unlocked: unlocked(st, nid, l.id), exam_mode: window.EXAMS && window.EXAMS[l.id] ? "generated" : "bank", question_count: qCount(l.id), watched: st.views.some(v => v.nid === nid && v.lid === l.id),
           done: done(st, nid, l.id), best: mine.length ? Math.max(...mine.map(a => a.percent)) : null, attempts_count: mine.length };

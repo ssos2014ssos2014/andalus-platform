@@ -1,65 +1,35 @@
-// تعدد المدارس: هوية كل مدرسة (الاسم والشعار والحقوق) — المحتوى مشترك والبيانات معزولة في قاعدة البيانات
+// تحديد المدرسة (المنصة) من الرابط: asma.html أو ?s=asma — والافتراضي ثانوية الأندلس
 (() => {
-  const SCHOOLS = {
-    andalus: {
-      key: "andalus", name: "ثانوية الأندلس بترقش", region: "منطقة عسير", page: "index.html",
-      logo: "logo.png", favicon: "favicon.png",
-      credits: [
-        { name: "أ. أحمد علي موسى المشيبي", role: "معلم اللغة الإنجليزية", tag: "فكرة وتنفيذ", av: "أ" },
-        { name: "أ. علي جابر علي الألمعي", role: "وكيل الشؤون التعليمية", av: "ع" }
-      ],
-      creditsLine: "معلم اللغة الإنجليزية أ. أحمد علي موسى المشيبي<br>وكيل الشؤون التعليمية أ. علي جابر علي الألمعي",
-      sig: "c1bb487a7eaf000a5230399842979fa3966033e1f444041335c769c11e29e28f",
-      sigText: "أحمد علي موسى المشيبي | معلم اللغة الإنجليزية | علي جابر علي الألمعي | وكيل الشؤون التعليمية | ثانوية الأندلس بترقش | 1447هـ / 2026م"
-    },
-    asma: {
-      key: "asma", name: "ثانوية أسماء بنت أبي بكر", region: "", page: "asma.html",
-      logo: "logo-asma.png", favicon: "favicon-asma.png",
-      credits: [{ name: "أ. عبدية علي موسى الدارسي", role: "", tag: "حقوق المنصة", av: "ع" }], creditsLabel: "حقوق المنصة",
-      creditsLine: "أ. عبدية علي موسى الدارسي",
-      sig: "db51d52e341e243e6e10456d24f44679dce5876d137a2868ab2c9599e707d09e",
-      sigText: "عبدية علي موسى الدارسي | ثانوية أسماء بنت أبي بكر | 1447هـ / 2026م"
-    }
+  const D = {
+    andalus: { key: "andalus", name: "ثانوية الأندلس بترقش", short: "ثانوية الأندلس", region: "ثانوية الأندلس بترقش — منطقة عسير", logo: "logo.png", favicon: "favicon.png", female: false, test: "0000", home: "index.html" },
+    asma: { key: "asma", name: "ثانوية أسماء بنت أبي بكر بمحايل عسير", short: "ثانوية أسماء بنت أبي بكر", region: "ثانوية أسماء بنت أبي بكر — محايل عسير", logo: "logo-asma.png", favicon: "favicon-asma.png", female: true, test: "0001", home: "asma.html" }
   };
-  const LS = "school-key";
-  const read = () => { try { return localStorage.getItem(LS); } catch { return null; } };
-  const qp = new URLSearchParams(location.search).get("school");
-  let key = [window.SCHOOL_KEY, qp, read()].find(k => k && SCHOOLS[k]) || "andalus";
-
-  function apply() {
-    const s = SCHOOLS[key];
-    const ic = document.querySelector('link[rel="icon"]'); if (ic) ic.href = s.favicon;
-    document.title = document.title.replace(/ثانوية [^|]+$/, s.name);
-    document.querySelectorAll("img[data-school-logo]").forEach(i => { i.src = s.logo; i.alt = "شعار " + s.name; });
+  const q = new URLSearchParams(location.search).get("s");
+  let k = window.FORCE_SCHOOL || (q && D[q] ? q : null) || (/asma/i.test(location.pathname) ? "asma" : "andalus");
+  window.SCHOOLS_INFO = D;
+  window.SCHOOL = D[k];
+  window.setSchool = key => { if (D[key]) window.SCHOOL = D[key]; applyBrand(); };
+  function applyBrand() {
+    const fav = document.querySelector('link[rel="icon"]'); if (fav) fav.href = window.SCHOOL.favicon;
+    if (window.SCHOOL.key === "asma") document.title = document.title.replace("ثانوية الأندلس بترقش", window.SCHOOL.name);
+    document.documentElement.dataset.school = window.SCHOOL.key;
   }
-  window.SCHOOLS = SCHOOLS;
-  window.SCHOOL = {
-    get key() { return key; },
-    get cur() { return SCHOOLS[key]; },
-    get name() { return SCHOOLS[key].name; },
-    get logo() { return SCHOOLS[key].logo; },
-    get alt() { return "شعار " + SCHOOLS[key].name; },
-    set(k) {
-      if (!SCHOOLS[k] || k === key) return;
-      key = k; try { localStorage.setItem(LS, k); } catch {}
-      apply(); document.dispatchEvent(new Event("schoolchange"));
-    }
+  applyBrand();
+  // ---------- صيغة المؤنث ----------
+  const DICT = {
+    student: { "الطالب التجريبي": "الطالبة التجريبية", "طالب تجريبي": "طالبة تجريبية", "أنهيت": "أنهيتِ", "راجع": "راجعي", "وراجع": "وراجعي", "اضغط": "اضغطي", "واضغط": "واضغطي", "تضغط": "تضغطي", "أعد": "أعيدي", "اكتب": "اكتبي", "اكتبه": "اكتبيه", "شاهد": "شاهدي", "ابدأ": "ابدئي", "انتقل": "انتقلي", "ننصحك": "ننصحكِ", "أنت": "أنتِ", "تريد": "تريدين", "احفظ": "احفظي", "واحفظ": "واحفظي", "محاولاتك": "محاولاتكِ", "معلمك": "معلمتكِ", "ادخل": "ادخلي", "افتح": "افتحي", "توقفت": "توقفتِ", "تابع": "تابعي", "وتابع": "وتابعي", "شئت": "شئتِ", "أوقف": "أوقفي", "عودتك": "عودتكِ", "استخدم": "استخدمي", "أحسنت": "أحسنتِ", "اجتزت": "اجتزتِ", "اقتربت": "اقتربتِ", "أخطأت": "أخطأتِ", "إجابتك": "إجابتكِ", "إجاباتك": "إجاباتكِ", "تتنقل": "تتنقلين", "حصلت": "حصلتِ", "شهاداتك": "شهاداتكِ", "ويمكنك": "ويمكنكِ", "يمكنك": "يمكنكِ", "تأكد": "تأكدي", "اختبر": "اختبري", "نفسك": "نفسكِ", "تنتقل": "تنتقلين", "تجتاز": "تجتازين", "جرّب": "جرّبي", "اختر": "اختاري", "تقدمك": "تقدمكِ", "درجاتك": "درجاتكِ", "شاهدت": "شاهدتِ", "تكمل": "تكملين", "جوالك": "جوالكِ", "معك": "معكِ", "رقمك": "رقمكِ", "لغيرك": "لغيركِ", "وصلت": "وصلتِ", "توقفك": "توقفكِ", "واقرأ": "واقرئي", "اقرأ": "اقرئي", "تشاهد": "تشاهدي", "فارجع": "فارجعي", "ارجع": "ارجعي", "المس": "المسي", "لتعيد": "لتعيدي", "اختباراتك": "اختباراتكِ", "أجبت": "أجبتِ", "تجب": "تجيبي", "مستواك": "مستواكِ", "ودوّن": "ودوّني", "أجب": "أجيبي", "نتيجتك": "نتيجتكِ", "راجعها": "راجعيها", "صفحتك": "صفحتكِ", "صفحتك،": "صفحتكِ،", "استعرض": "استعرضي", "تصلك": "تصلكِ", "وستصلك": "وستصلكِ", "واصل": "واصلي", "لديك": "لديكِ", "لك": "لكِ", "بك": "بكِ", "الطالب": "الطالبة", "طالب": "طالبة", "مرحبًا": "مرحبًا", "أكملت": "أكملتِ", "أعدت": "أعدتِ", "عليك": "عليكِ", "تستطيع": "تستطيعين", "تحتاج": "تحتاجين", "تبدأ": "تبدئي", "انتبه": "انتبهي", "حاول": "حاولي", "تدرّب": "تدرّبي", "خصص": "خصصي", "سجّل": "سجّلي", "أدخل": "أدخلي", "وقتك": "وقتكِ", "حسابك": "حسابكِ", "بياناتك": "بياناتكِ", "إحصاءاتك": "إحصاءاتكِ", "مكانك": "مكانكِ", "مشاهدتك": "مشاهدتكِ", "محاولتك": "محاولتكِ", "درجتك": "درجتكِ", "أخطائك": "أخطائكِ", "ملفاتك": "ملفاتكِ" },
+    admin: { "لوحة المعلم": "لوحة المعلمة", "المعلم": "المعلمة", "المعلمين": "المعلمات", "الطلاب": "الطالبات", "للطلاب": "للطالبات", "والطلاب": "والطالبات", "طلاب": "طالبات", "الطالب": "الطالبة", "طالب": "طالبة", "طالبًا": "طالبة", "كطالب": "كطالبة", "للطالب": "للطالبة", "الطلبة": "الطالبات", "المتميزين": "المتميزات", "طلابك": "طالباتك", "الطالب التجريبي": "الطالبة التجريبية", "صفحته": "صفحتها", "صفحاتهم": "صفحاتهن", "لهم": "لهن", "شهاداته": "شهاداتها", "محاولاته": "محاولاتها", "مشاهداته": "مشاهداتها", "دخوله": "دخولها", "جواله": "جوالها", "إجاباته": "إجاباتها" }
   };
-  try { localStorage.setItem(LS, key); } catch {}
-  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", apply); else apply();
-
-  // معرفة مدرسة الطالب بعد دخوله (حتى لو فتح رابط مدرسة أخرى)
-  if (window.API && API.live) {
-    const cache = {}, portal = API.portal;
-    API.portal = async nid => {
-      const d = await portal(nid);
-      if (d && nid !== "0000") {
-        if (!(nid in cache)) {
-          try { const { data } = await API.sb.rpc("student_school", { p_nid: nid }); cache[nid] = data || null; } catch { cache[nid] = null; }
-        }
-        if (cache[nid]) window.SCHOOL.set(cache[nid]);
-      }
-      return d;
-    };
-  }
+  const SKIP = /اللهم|اللَّهُمَّ|رب اشرح|أستودعك|إني أسألك/;
+  window.startFeminine = kind => {
+    const FEM = DICT[kind] || DICT.student;
+    const re = new RegExp("(^|[^\\u0600-\\u06FF])([وف]?)(" + Object.keys(FEM).sort((a, b) => b.length - a.length).map(k => k.replace(/ /g, "\\s")).join("|") + ")(?=$|[^\\u0600-\\u06FF\\u064B-\\u0652])", "g");
+    const fem = t => SKIP.test(t) ? t : t.replace(re, (m, pre, px, w) => pre + px + (FEM[w] || FEM[w.replace(/\s/g, " ")] || w));
+    const walk = n => { if (n.nodeType === 3) { const v = fem(n.nodeValue); if (v !== n.nodeValue) n.nodeValue = v; }
+      else if (n.nodeType === 1 && !/^(SCRIPT|STYLE|SVG|TEXTAREA|INPUT)$/i.test(n.tagName)) { if (n.title) n.title = fem(n.title); n.childNodes.forEach(walk); }
+      else if (n.nodeType === 1 && n.tagName === "INPUT" && n.placeholder) n.placeholder = fem(n.placeholder); };
+    const start = () => { new MutationObserver(ms => ms.forEach(m => m.type === "characterData" ? walk(m.target) : m.addedNodes.forEach(walk))).observe(document.body, { childList: true, subtree: true, characterData: true }); walk(document.body); };
+    document.body ? start() : document.addEventListener("DOMContentLoaded", start);
+    window.feminize = fem;
+  };
 })();

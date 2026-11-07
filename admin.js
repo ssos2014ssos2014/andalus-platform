@@ -32,7 +32,8 @@
     }
     if (clearPhone) { const { error } = await sb.from("students").update({ phone: null }).eq("national_id", nid); if (error) throw error; }
   }
-  const TEST_ID = "0000";
+  let TEST_ID = SCHOOL.test;
+  if (SCHOOL.female) startFeminine("admin");
   const baseName = n => n.replace(/\.pdf$/i, "").replace(/[_]+/g, " ").trim();
 
   function h(tag, attrs, ...kids) {
@@ -77,6 +78,10 @@
     if (!data.session) return viewLogin();
     const { data: ok } = await sb.rpc("is_admin");
     if (!ok) return viewLogin("هذا الحساب ليس ضمن حسابات المعلمين المسجلة في جدول admins.");
+    // كل حساب معلم مرتبط بمدرسته: تُعرض بيانات مدرسته فقط
+    const { data: sk } = await sb.rpc("admin_school"); A.school = typeof sk === "string" && SCHOOLS_INFO[sk] ? sk : "andalus";
+    if (A.school !== SCHOOL.key) { location.replace("admin.html" + (A.school === "andalus" ? "" : "?s=" + A.school)); return; }
+    TEST_ID = SCHOOL.test; A.super = A.school === "andalus";
     const { data: ls } = await sb.from("lectures").select("*").order("id");
     const { data: st } = await sb.from("settings").select("*").eq("id", 1).single(); A.settings = st || {};
     A.lectures = ls || [];
@@ -102,15 +107,16 @@
   // ---------- الإطار ----------
   const TABS = [["dashboard", "لوحة المؤشرات"], ["students", "الطلاب"], ["certs", "🏅 الشهادات"], ["ctests", "🧪 إنشاء اختبار"], ["questions", "الأسئلة"], ["lectures", "المحاضرات"], ["results", "النتائج"], ["settings", "الإعدادات"]];
   async function render() {
+    if (!A.super && ["questions", "lectures", "settings"].includes(A.tab)) A.tab = "dashboard";
     const body = h("div", null, h("div", { class: "loading" }, "جارٍ التحميل…"));
     app.replaceChildren(
       h("header", { class: "band" }, h("div", { class: "band-inner" },
-        h("div", { class: "brand" }, h("span", { class: "logo-plate" }, h("img", { src: "logo.png", alt: "شعار ثانوية الأندلس" })), h("div", null, (A.settings && A.settings.platform_name) || "التأسيس والتدريب لاختبار القدرات العامة", h("small", null, "لوحة المعلم"))),
+        h("div", { class: "brand" }, h("span", { class: "logo-plate" }, h("img", { src: SCHOOL.logo, alt: "شعار " + SCHOOL.short })), h("div", null, (A.settings && A.settings.platform_name) || "التأسيس والتدريب لاختبار القدرات العامة", h("small", null, "لوحة المعلم"))),
         h("div", { class: "spacer" }),
-        h("a", { class: "btn gold sm", href: "index.html?as=" + TEST_ID, target: "_blank", title: "يفتح المنصة بحساب الطالب التجريبي ٠٠٠٠" }, "👁 الدخول كطالب"),
+        h("a", { class: "btn gold sm", href: SCHOOL.home + "?as=" + TEST_ID, target: "_blank", title: "يفتح المنصة بحساب الطالب التجريبي ٠٠٠٠" }, SCHOOL.female ? "👁 الدخول كطالبة" : "👁 الدخول كطالب"),
         h("button", { class: "btn ghost sm", onclick: async () => { await sb.auth.signOut(); viewLogin(); } }, "تسجيل الخروج"))),
       h("main", { class: "wrap" },
-        h("nav", { class: "tabsbar", role: "tablist" }, TABS.map(([k, t]) =>
+        h("nav", { class: "tabsbar", role: "tablist" }, TABS.filter(([k]) => A.super || !["questions", "lectures", "settings"].includes(k)).map(([k, t]) =>
           h("button", { role: "tab", "aria-selected": String(A.tab === k), onclick: () => { A.tab = k; A.msg = null; render(); } }, t))),
         msgBox(), body));
     const fn = { dashboard: tabDashboard, students: tabStudents, certs: tabCerts, ctests: tabCtests, questions: tabQuestions, lectures: tabLectures, results: tabResults, settings: tabSettings }[A.tab];
@@ -158,7 +164,7 @@
         h("div", null, h("h2", { style: "margin:0" }, "👁 حساب الطالب التجريبي (٠٠٠٠)"),
           h("p", { class: "small muted", style: "margin:4px 0 0" }, "حسابك لتجربة المنصة كما يراها الطالب. نتائجه هنا فقط، ولا تدخل في إحصاءات الطلاب ولا في تبويب النتائج.")),
         h("div", { class: "row" },
-          h("a", { class: "btn gold", href: "index.html?as=" + TEST_ID, target: "_blank" }, "الدخول كطالب"),
+          h("a", { class: "btn gold", href: SCHOOL.home + "?as=" + TEST_ID, target: "_blank" }, "الدخول كطالب"),
           h("button", { class: "btn ghost", onclick: async () => {
             if (!confirm("تصفير حساب الطالب التجريبي؟ تُحذف محاولاته ومشاهداته.")) return;
             try { await resetStudent(TEST_ID, true); flash("ok", "تم تصفير حساب الطالب التجريبي."); } catch (e) { flash("err", e.message); }
@@ -259,7 +265,7 @@
       if (!/^\d{5,14}$/.test(nid) || !name) { bad.push(r); continue; }
       let ph = P.phoneCol >= 0 ? toLatinDigits(r[P.phoneCol]).replace(/\.0+$/, "") : "";
       if (/^5\d{8}$/.test(ph)) ph = "0" + ph; if (/^9665\d{8}$/.test(ph)) ph = "0" + ph.slice(3);
-      const rec = { national_id: nid, full_name: name,
+      const rec = { national_id: nid, full_name: name, school: A.school || SCHOOL.key,
         details: P.headers.map((k, i) => ({ k: k || `عمود ${i + 1}`, v: cell(r[i]) })).filter((d, i) => i !== P.idCol && i !== P.nameCol && i !== P.phoneCol && d.v !== "") };
       if (/^05\d{8}$/.test(ph)) rec.phone = ph;
       recs.push(rec);
@@ -606,7 +612,7 @@
 
   // ---------- النتائج ----------
   // ---------- الشهادات ----------
-  const PLATFORM_URL = () => location.origin + location.pathname.replace(/admin\.html.*$/, "");
+  const PLATFORM_URL = () => location.origin + location.pathname.replace(/admin\.html.*$/, "") + (SCHOOL.key === "andalus" ? "" : SCHOOL.home);
   const intlPhone = p => { p = String(p || "").replace(/\D/g, ""); return p.startsWith("05") ? "966" + p.slice(1) : p.startsWith("5") && p.length === 9 ? "966" + p : p; };
   function certMsg(c, name) {
     const sc = CERT.school(c.school), first = (name || "").trim().split(/\s+/)[0];
@@ -657,18 +663,17 @@
         h("section", { class: "panel" },
           h("h2", null, "٢. اختيار الطلاب"),
           h("div", { class: "row", style: "gap:12px;flex-wrap:wrap;align-items:end" },
-            h("label", { class: "field" }, h("span", null, "المدرسة"), h("select", { onchange: e => { C.school = e.target.value; draw(); } },
-              [["all", "الكل"], ["andalus", CERT.SCHOOLS.andalus.name], ["asma", CERT.SCHOOLS.asma.name]].map(([v, t]) => h("option", { value: v, selected: C.school === v }, t)))),
+
             h("label", { class: "field" }, h("span", null, "أقل عدد محاضرات مشاهدة"), num(C.minW, v => C.minW = v)),
             h("label", { class: "field" }, h("span", null, "أقل عدد اختبارات مجتازة"), num(C.minP, v => C.minP = v)),
             h("label", { class: "field" }, h("span", null, "بحث"), h("input", { type: "text", value: C.q, placeholder: "الاسم أو الهوية", onchange: e => { C.q = e.target.value.trim(); draw(); } })),
             h("button", { class: "btn ghost sm", onclick: () => { C.sel = new Set(); draw(); } }, "إلغاء التحديد")),
           h("p", { class: "small muted" }, `يظهر ${AR(shown.length)} طالبًا، والمحدد ${AR(C.sel.size)}. الترتيب حسب الاختبارات المجتازة ثم المحاضرات.`),
           h("div", { class: "table-wrap", style: "max-height:420px;overflow:auto" }, h("table", { class: "cert-pick" },
-            h("thead", null, h("tr", null, h("th", null, chkAll), h("th", null, "الاسم"), h("th", null, "المدرسة"), h("th", null, "محاضرات مشاهدة"), h("th", null, "اختبارات مجتازة"), h("th", null, "متوسط أفضل الدرجات"), h("th", null, "شهاداته"), h("th", null, "الجوال"))),
+            h("thead", null, h("tr", null, h("th", null, chkAll), h("th", null, "الاسم"), h("th", null, "محاضرات مشاهدة"), h("th", null, "اختبارات مجتازة"), h("th", null, "متوسط أفضل الدرجات"), h("th", null, "شهاداته"), h("th", null, "الجوال"))),
             h("tbody", null, shown.slice(0, 400).map(r => h("tr", null,
               h("td", null, h("input", { type: "checkbox", checked: C.sel.has(r.national_id), onchange: e => { e.target.checked ? C.sel.add(r.national_id) : C.sel.delete(r.national_id); draw(); } })),
-              h("td", null, r.full_name), h("td", { class: "small" }, r.school === "asma" ? "أسماء" : "الأندلس"),
+              h("td", null, r.full_name),
               h("td", null, AR(r.watched)), h("td", null, AR(r.passed)), h("td", null, r.avg_best != null ? AR(r.avg_best) + "٪" : "—"), h("td", null, AR(r.certs)),
               h("td", { class: "small" }, r.phone ? AR(r.phone) : h("span", { class: "muted" }, "—")))))))),
         h("section", { class: "panel" },
@@ -704,7 +709,8 @@
 
   // ---------- الاختبارات التي ينشئها المعلم ----------
   const BASE_URL = () => location.origin + location.pathname.replace(/admin\.html.*$/, "");
-  const examLink = c => `${BASE_URL()}exam.html?c=${c}`, resultLink = c => `${BASE_URL()}exam.html?r=${c}`;
+  const SQ = () => SCHOOL.key === "andalus" ? "" : "&s=" + SCHOOL.key;
+  const examLink = c => `${BASE_URL()}exam.html?c=${c}${SQ()}`, resultLink = c => `${BASE_URL()}exam.html?r=${c}${SQ()}`;
   const qrSrc = text => { try { if (window.qrcode) { const q = qrcode(0, "M"); q.addData(text); q.make(); return q.createDataURL(6, 8); } } catch {} return `https://api.qrserver.com/v1/create-qr-code/?size=260x260&data=${encodeURIComponent(text)}`; };
   const newCode = () => Array.from({ length: 6 }, () => "ABCDEFGHJKMNPQRSTUVWXYZ23456789"[Math.floor(Math.random() * 31)]).join("");
   function printDoc(title, inner) {
@@ -712,7 +718,7 @@
     w.document.write(`<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>${CTEST.esc(title)}</title><link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700;800&display=swap" rel="stylesheet"><link rel="stylesheet" href="${BASE_URL()}styles.css"><style>body{background:#fff;font-family:Tajawal,Tahoma,sans-serif;padding:18px 28px;color:#111}h1{font-size:22px;margin:4px 0}h2{font-size:18px;border-bottom:2px solid #1f6f78;padding-bottom:4px;margin-top:22px;page-break-after:avoid}.q{page-break-inside:avoid;margin:10px 0 14px}.q .b{font-weight:600;line-height:1.9}.o{display:grid;grid-template-columns:1fr 1fr;gap:4px 24px;margin:6px 18px 0}.top{display:flex;justify-content:space-between;align-items:center;border-bottom:3px double #c9a54a;padding-bottom:8px}.top img{height:64px}table{border-collapse:collapse;width:100%}td,th{border:1px solid #999;padding:5px 8px;text-align:center}.bub{display:inline-block;width:22px;height:22px;border:1.5px solid #333;border-radius:50%;line-height:20px;margin:0 3px;font-size:12px}@page{size:A4;margin:12mm}</style></head><body>${inner}<script>setTimeout(()=>print(),900)<\/script></body></html>`);
     w.document.close();
   }
-  const examHead = (e, sub) => `<div class="top"><div><strong>المملكة العربية السعودية — وزارة التعليم</strong><br>${CTEST.esc(CERT.school(e.school).name)}</div><div style="text-align:center"><h1>${CTEST.esc(e.title)}</h1><div>${sub}</div></div>${e.school === "andalus" ? `<img src="${BASE_URL()}logo.png">` : "<span></span>"}</div><p>اسم ${e.school === "asma" ? "الطالبة" : "الطالب"}: ........................................ &nbsp; رقم الهوية: .......................... &nbsp; رمز الاختبار: <strong>${e.code}</strong></p>`;
+  const examHead = (e, sub) => `<div class="top"><div><strong>المملكة العربية السعودية — وزارة التعليم</strong><br>${CTEST.esc(CERT.school(e.school).name)}</div><div style="text-align:center"><h1>${CTEST.esc(e.title)}</h1><div>${sub}</div></div><img src="${BASE_URL()}${CERT.school(e.school).logo}"></div><p>اسم ${e.school === "asma" ? "الطالبة" : "الطالب"}: ........................................ &nbsp; رقم الهوية: .......................... &nbsp; رمز الاختبار: <strong>${e.code}</strong></p>`;
   function printBooklet(e) {
     const T = CTEST.toHtml, L = CTEST.LETTERS;
     printDoc(e.title, examHead(e, "كراسة الأسئلة · " + CTEST.LEVELS[e.level]) + e.sections.map(s => `<h2>${CTEST.esc(s.name)} — ${CTEST.AR(s.questions.length)} سؤالًا — الزمن ${CTEST.AR(s.minutes)} دقيقة</h2>` + s.questions.map((q, i) => `<div class="q"><div class="b">${CTEST.AR(i + 1)}) ${T(q.body)}</div><div class="o">${q.options.map((o, j) => `<div>${L[j]}) ${T(o)}</div>`).join("")}</div></div>`).join("")).join(""));
@@ -761,7 +767,7 @@
             h("label", { class: "field", style: "flex:2;min-width:240px" }, h("span", null, "اسم الاختبار"), h("input", { type: "text", value: T.title, placeholder: "مثال: الاختبار التجريبي الأول — الفصل الأول", oninput: ev => T.title = ev.target.value })),
             h("label", { class: "field" }, h("span", null, "طريقة التقديم"), h("select", { onchange: ev => { T.delivery = ev.target.value; } }, [["computer", "محوسب (رابط وباركود)"], ["paper", "ورقي (كراسة وورقة إجابة)"]].map(([v, t]) => h("option", { value: v, selected: T.delivery === v }, t)))),
             h("label", { class: "field" }, h("span", null, "مستوى الصعوبة"), h("select", { onchange: ev => { T.level = +ev.target.value; } }, CTEST.LEVELS.map((t, i) => h("option", { value: i, selected: T.level === i }, t)))),
-            h("label", { class: "field" }, h("span", null, "المدرسة"), h("select", { onchange: ev => { T.school = ev.target.value; } }, [["andalus", CERT.SCHOOLS.andalus.name], ["asma", CERT.SCHOOLS.asma.name]].map(([v, t]) => h("option", { value: v, selected: T.school === v }, t))))),
+            null),
           h("p", { class: "small muted" }, "المستوى الأساسي يطابق صعوبة أسئلة المحاضرات، وكل مستوى أعلى يرفع صعوبة الأرقام والحسابات في الكمي، ويزيد نسبة أسئلة الفهم والاستنتاج والخطأ السياقي في اللفظي. الأسئلة تُولَّد جديدة في كل مرة، فلا تطابق أسئلة المحاضرات ولا أمثلتها."),
           h("div", { class: "row", style: "gap:12px;flex-wrap:wrap;margin:10px 0" }, subjBox(T.q, "📐 الكمي"), subjBox(T.v, "📖 اللفظي")),
           h("div", { class: "row", style: "gap:12px;flex-wrap:wrap" },
@@ -775,7 +781,7 @@
             ev.target.disabled = true; ev.target.textContent = "جارٍ توليد الأسئلة…"; await new Promise(r => setTimeout(r, 30));
             try {
               const sections = CTEST.generate({ level: T.level, lectures: lecs.filter(l => T.sel.has(l.id)), quant: T.q, verbal: T.v, seed: (Date.now() ^ (Math.random() * 1e9)) >>> 0 });
-              const rec = { code: newCode(), title: T.title.trim(), school: T.school, delivery: T.delivery, level: T.level, config: { quant: T.q, verbal: T.v, lectures: [...T.sel] }, sections };
+              const rec = { code: newCode(), title: T.title.trim(), school: A.school || SCHOOL.key, delivery: T.delivery, level: T.level, config: { quant: T.q, verbal: T.v, lectures: [...T.sel] }, sections };
               const { data, error } = await sb.from("custom_exams").insert(rec).select("id").single(); if (error) throw error;
               T.note = { type: "ok", text: `✓ أُنشئ الاختبار «${rec.title}» برمز ${rec.code}، وفيه ${AR(sections.reduce((t, s) => t + s.questions.length, 0))} سؤالًا.` };
               T.open = data.id; A.msg = null; render();

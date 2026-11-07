@@ -1,7 +1,11 @@
 (function () {
   const app = document.getElementById("app");
-  const TEST_ID = "0000"; const UNIT = { quant: 5, verbal: 2 }; // عدد المحاضرات في كل وحدة لكل قسم
+  const TEST_ID = SCHOOL.test; const UNIT = { quant: 5, verbal: 2 }; // عدد المحاضرات في كل وحدة لكل قسم
   const isTest = () => S.nid === TEST_ID;
+  // فصل المنصتين: لا يدخل طالب مدرسة من منصة مدرسة أخرى
+  { const _portal = API.portal; API.portal = async nid => { const d = await _portal(nid); return d && (d.student.school || "andalus") !== SCHOOL.key ? null : d; }; }
+  // صيغة المؤنث في منصة ثانوية أسماء
+  if (SCHOOL.female) startFeminine("student");
 
   const LETTERS = ["أ", "ب", "ج", "د", "هـ", "و"];
   const S = { nid: null, data: null, view: "login", lid: null, part: 0, quiz: null, result: null, error: "", busy: false };
@@ -46,10 +50,10 @@
 
   function band() {
     const st = settings();
-    const testBar = S.nid === TEST_ID && h("div", { class: "test-bar" }, "👁 أنت في وضع الطالب التجريبي (٠٠٠٠). محاولاتك هنا لا تظهر في إحصاءات الطلاب.");
+    const testBar = S.nid === TEST_ID && h("div", { class: "test-bar" }, "👁 أنت في وضع الحساب التجريبي (" + AR(TEST_ID) + "). محاولاتك هنا لا تظهر في الإحصاءات.");
     return [testBar, h("header", { class: "band" },
       h("div", { class: "band-inner" },
-        h("div", { class: "brand" }, mark(), h("div", null, st.platform_name || "التأسيس والتدريب لاختبار القدرات العامة", h("small", null, st.school_name))),
+        h("div", { class: "brand" }, mark(), h("div", null, st.platform_name || "التأسيس والتدريب لاختبار القدرات العامة", h("small", null, SCHOOL.name))),
         h("div", { class: "spacer" }),
         S.data && h("span", { class: "who" }, S.data.student.full_name),
         S.data && h("button", { class: "btn ghost sm", onclick: logout }, "تسجيل الخروج")))].filter(Boolean);
@@ -69,7 +73,7 @@
       btn.disabled = true; btn.textContent = "جارٍ التحقق…";
       try {
         const data = await API.portal(nid);
-        if (!data) { S.error = "رقم الهوية غير مسجل في الدورة. تأكد من الرقم أو راجع معلمك."; return render(); }
+        if (!data) { S.error = `رقم الهوية غير مسجل في منصة ${SCHOOL.short}. تأكد من الرقم أو راجع معلمك.`; return render(); }
         try { const sid = await API.login(nid); if (sid) ss.set("andalus-sid", sid); await refresh0(nid, data); } catch { Object.assign(S, { nid, data }); }
         ss.set("andalus-nid", nid); startPing(); go(S.data.student.phone || nid === TEST_ID ? "home" : "phone");
       } catch (err) { S.error = err.message; render(); }
@@ -80,7 +84,7 @@
     setTimeout(() => input.focus(), 0);
     return [band(), h("main", { class: "wrap narrow" },
       h("section", { class: "login-hero" },
-        mark(), h("h1", null, st.platform_name || "التأسيس والتدريب لاختبار القدرات العامة"), h("p", { class: "eyebrow", style: "justify-content:center" }, `${st.school_name} · ${st.course_name}`),
+        mark(), h("h1", null, st.platform_name || "التأسيس والتدريب لاختبار القدرات العامة"), h("p", { class: "eyebrow", style: "justify-content:center" }, `${SCHOOL.name} · ${st.course_name}`),
         h("p", null, "شاهد المحاضرة، ثم اختبر نفسك. تنتقل للمحاضرة التالية حين تجتاز اختبار المحاضرة الحالية.")),
       h("div", { class: "panel login-card" }, form,
         !API.live && h("p", { class: "small muted", style: "margin:14px 0 0" },
@@ -93,7 +97,7 @@
     return hh ? `${AR(hh)} س ${AR(mm)} د` : mm ? `${AR(mm)} دقيقة` : sec ? "أقل من دقيقة" : `${AR(0)} د`; };
   const pct = v => v == null ? "—" : AR(v) + "٪";
   const MARK = '<svg viewBox="0 0 48 48" aria-hidden="true"><path d="M24 3l6.2 14.8L45 24l-14.8 6.2L24 45l-6.2-14.8L3 24l14.8-6.2z" fill="currentColor"/><rect x="15" y="15" width="18" height="18" transform="rotate(45 24 24)" fill="none" stroke="var(--tile-deep)" stroke-width="2.4"/></svg>';
-  function mark() { return h("span", { class: "logo-plate" }, h("img", { src: "logo.png", alt: "شعار ثانوية الأندلس" })); }
+  function mark() { return h("span", { class: "logo-plate" }, h("img", { src: SCHOOL.logo, alt: "شعار " + SCHOOL.short })); }
 
   const SECTIONS = {
     quant: { name: "القسم الكمي", icon: "∑", desc: "الحساب والجبر والهندسة والإحصاء وحل المسائل", tone: "q" },
@@ -148,9 +152,9 @@
     };
     return [band(), h("main", { class: "wrap" },
       h("section", { class: "hero hero-home" },
-        h("span", { class: "hero-logo" }, h("img", { src: "logo.png", alt: "شعار ثانوية الأندلس" })),
+        h("span", { class: "hero-logo" }, h("img", { src: SCHOOL.logo, alt: "شعار " + SCHOOL.short })),
         h("div", { class: "hero-text" },
-          h("p", { class: "eyebrow" }, settings().school_name),
+          h("p", { class: "eyebrow" }, SCHOOL.name),
           h("h1", null, `مرحبًا ${first} 👋`),
           h("p", null, "اختر القسم الذي تريد التدرّب عليه، وتابع تقدمك من هنا."))),
       h("div", { class: "sections" }, secCard("quant"), secCard("verbal")),
@@ -218,7 +222,7 @@
     return [band(), h("main", { class: "wrap" },
       h("div", { class: "row", style: "margin-bottom:14px" }, h("button", { class: "btn ghost sm", onclick: () => go("home") }, "→ الصفحة الرئيسية")),
       h("section", { class: "hero " + sec.tone },
-        h("span", { class: "hero-logo" }, h("img", { src: "logo.png", alt: "شعار ثانوية الأندلس" })),
+        h("span", { class: "hero-logo" }, h("img", { src: SCHOOL.logo, alt: "شعار " + SCHOOL.short })),
         h("div", { class: "hero-text" },
           h("p", { class: "eyebrow" }, settings().platform_name),
           h("h1", { class: "sec-title" }, svgSpan("sec-icon sm", SEC_ICON[key]), sec.name),

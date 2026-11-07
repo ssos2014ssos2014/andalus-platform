@@ -1,6 +1,7 @@
 // صفحة الاختبار المحوسب والاستعلام عن النتيجة (exam.html?c=رمز أو exam.html?r=رمز)
 (() => {
   const app = document.getElementById("app"), { AR, esc, toHtml, LETTERS } = CTEST;
+  if (SCHOOL.female) startFeminine("student");
   const qp = new URLSearchParams(location.search);
   const S = { code: (qp.get("c") || qp.get("r") || "").toUpperCase(), mode: qp.get("r") ? "result" : "exam", nid: "", exam: null, sec: 0, q: 0, answers: [], deadline: 0, timer: null, error: "" };
   const KEY = () => `ctest:${S.code}:${S.nid}`;
@@ -8,7 +9,7 @@
   const fr = m => { for (const k in ERR) if (String(m).includes(k)) return ERR[k]; return "تعذر الاتصال بالخادم. تحقق من الإنترنت ثم أعد المحاولة."; };
   async function rpc(fn, args) { if (!API.live) throw new Error("المنصة غير مربوطة بقاعدة البيانات."); const { data, error } = await API.sb.rpc(fn, args); if (error) throw new Error(fr(error.message)); return data; }
   const el = (html) => { const d = document.createElement("div"); d.innerHTML = html; return d; };
-  const head = (sub) => `<header class="band"><div class="band-inner"><div class="brand"><span class="logo-plate"><img src="logo.png" alt=""></span><div>التأسيس والتدريب لاختبار القدرات العامة<small>${esc(sub || "")}</small></div></div></div></header>`;
+  const head = (sub) => `<header class="band"><div class="band-inner"><div class="brand"><span class="logo-plate"><img src="${SCHOOL.logo}" alt=""></span><div>التأسيس والتدريب لاختبار القدرات العامة<small>${esc(sub || "")}</small></div></div></div></header>`;
   const save = () => { try { localStorage.setItem(KEY(), JSON.stringify({ sec: S.sec, q: S.q, answers: S.answers, deadline: S.deadline })); } catch {} };
   const fmt = ms => { const s = Math.max(0, Math.floor(ms / 1000)); return AR(`${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`); };
 
