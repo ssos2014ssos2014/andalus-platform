@@ -79,13 +79,30 @@
     const { data: ok } = await sb.rpc("is_admin");
     if (!ok) return viewLogin("هذا الحساب ليس ضمن حسابات المعلمين المسجلة في جدول admins.");
     // كل حساب معلم مرتبط بمدرسته: تُعرض بيانات مدرسته فقط
-    const { data: sk } = await sb.rpc("admin_school"); A.school = typeof sk === "string" && SCHOOLS_INFO[sk] ? sk : "andalus";
-    if (A.school !== SCHOOL.key) { location.replace("admin.html" + (A.school === "andalus" ? "" : "?s=" + A.school)); return; }
+    const { data: info, error: ie } = await sb.rpc("admin_info");
+    if (ie) return viewLogin(/admin_info/.test(ie.message) ? "شغّل ملفي update-v18.sql و update-v19.sql في Supabase أولًا، ثم أعد الدخول." : ie.message);
+    A.school = info && SCHOOLS_INFO[info.school] ? info.school : "andalus"; A.canSwitch = !!(info && info.can_switch);
+    if (A.school !== SCHOOL.key) {
+      // حساب يدير المنصتين: يتحوّل إلى المنصة المفتوحة في الرابط
+      if (A.canSwitch) { const { error } = await sb.rpc("admin_switch_school", { p_school: SCHOOL.key }); if (!error) { A.school = SCHOOL.key; } }
+      if (A.school !== SCHOOL.key) return viewWrongSchool(A.school);
+    }
     TEST_ID = SCHOOL.test; A.super = A.school === "andalus";
     const { data: ls } = await sb.from("lectures").select("*").order("id");
     const { data: st } = await sb.from("settings").select("*").eq("id", 1).single(); A.settings = st || {};
     A.lectures = ls || [];
     render();
+  }
+  function viewWrongSchool(own) {
+    const o = SCHOOLS_INFO[own], here = SCHOOL;
+    app.replaceChildren(h("main", { class: "wrap narrow" }, h("div", { class: "panel login-card", style: "margin-top:60px;text-align:center" },
+      h("img", { src: here.logo, alt: "", style: "height:80px" }),
+      h("h1", null, here.female ? "لوحة المعلمة — " + here.short : "لوحة المعلم — " + here.short),
+      h("div", { class: "alert err" }, `هذا الحساب مسجّل لمنصة ${o.name}، ولا يملك صلاحية إدارة منصة ${here.name}. كل منصة مستقلة في بياناتها.`),
+      h("p", { class: "small muted" }, here.key === "asma" ? "لإدارة منصة أسماء سجّلي الدخول بحساب معلمة أسماء، أو اطلب من مدير المنصة منح حسابك صلاحية إدارة المنصتين." : "لإدارة منصة الأندلس سجّل الدخول بحساب معلم الأندلس."),
+      h("div", { class: "row", style: "justify-content:center;gap:10px" },
+        h("a", { class: "btn", href: "admin.html" + (own === "andalus" ? "" : "?s=" + own) }, "الذهاب إلى لوحة " + o.short),
+        h("button", { class: "btn ghost", onclick: async () => { await sb.auth.signOut(); viewLogin(); } }, "تسجيل الخروج والدخول بحساب آخر")))));
   }
   function viewLogin(err) {
     const email = h("input", { type: "email", required: true, autocomplete: "username" });
@@ -114,6 +131,7 @@
         h("div", { class: "brand" }, h("span", { class: "logo-plate" }, h("img", { src: SCHOOL.logo, alt: "شعار " + SCHOOL.short })), h("div", null, (A.settings && A.settings.platform_name) || "التأسيس والتدريب لاختبار القدرات العامة", h("small", null, "لوحة المعلم"))),
         h("div", { class: "spacer" }),
         h("a", { class: "btn gold sm", href: SCHOOL.home + "?as=" + TEST_ID, target: "_blank", title: "يفتح المنصة بحساب الطالب التجريبي ٠٠٠٠" }, SCHOOL.female ? "👁 الدخول كطالبة" : "👁 الدخول كطالب"),
+        A.canSwitch && h("a", { class: "btn ghost sm", href: SCHOOL.key === "asma" ? "admin.html" : "admin.html?s=asma", title: "حسابك يدير المنصتين" }, SCHOOL.key === "asma" ? "⇄ منصة الأندلس" : "⇄ منصة أسماء"),
         h("button", { class: "btn ghost sm", onclick: async () => { await sb.auth.signOut(); viewLogin(); } }, "تسجيل الخروج"))),
       h("main", { class: "wrap" },
         h("nav", { class: "tabsbar", role: "tablist" }, TABS.filter(([k]) => A.super || !["questions", "lectures", "settings"].includes(k)).map(([k, t]) =>
