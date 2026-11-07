@@ -5,13 +5,16 @@
     asma: { key: "asma", name: "ثانوية أسماء بنت أبي بكر بمحايل عسير", short: "ثانوية أسماء بنت أبي بكر", region: "ثانوية أسماء بنت أبي بكر — محايل عسير", logo: "logo-asma.png", favicon: "favicon-asma.png", female: true, test: "0001", home: "asma.html" }
   };
   const q = new URLSearchParams(location.search).get("s");
-  let k = window.FORCE_SCHOOL || (q && D[q] ? q : null) || (/asma/i.test(location.pathname) ? "asma" : "andalus");
+  // رابط مستقل لأسماء: أي نطاق يحتوي «asma» (مثل asma-platform.vercel.app) يفتح منصة أسماء مباشرة
+  const ownHost = /asma/i.test(location.hostname);
+  if (ownHost) D.asma.home = "./";
+  let k = window.FORCE_SCHOOL || (ownHost ? "asma" : null) || (q && D[q] ? q : null) || (/asma/i.test(location.pathname) ? "asma" : "andalus");
   window.SCHOOLS_INFO = D;
   window.SCHOOL = D[k];
   window.setSchool = key => { if (D[key]) window.SCHOOL = D[key]; applyBrand(); };
   function applyBrand() {
     const fav = document.querySelector('link[rel="icon"]'); if (fav) fav.href = window.SCHOOL.favicon;
-    if (window.SCHOOL.key === "asma") document.title = document.title.replace("ثانوية الأندلس بترقش", window.SCHOOL.name);
+    if (/^منصة (تأسيس القدرات|التأسيس والتدريب)/.test(document.title)) document.title = "منصة تأسيس القدرات | " + window.SCHOOL.name;
     document.documentElement.dataset.school = window.SCHOOL.key;
   }
   applyBrand();
