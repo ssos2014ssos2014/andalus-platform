@@ -677,3 +677,9 @@ sup.ex { font-size: .68em; vertical-align: .6em; line-height: 0; margin-inline-s
 .q-intro { font-size: .9rem; color: var(--muted); margin-bottom: 6px; }
 .passage { font-weight: 500; font-size: 1.02rem; line-height: 2; background: var(--paper); border: 1px solid var(--line); border-inline-start: 4px solid var(--tile); border-radius: 12px; padding: 12px 16px; margin-bottom: 14px; white-space: pre-wrap; }
 .rv-q .passage { font-size: .92rem; }
+
+/* الكسور الرأسية في الأسئلة */
+.frc { display: inline-flex; flex-direction: column; vertical-align: middle; text-align: center; line-height: 1.15; margin: 0 3px; font-size: .92em; }
+.frc .fn { border-bottom: 1.6px solid currentColor; padding: 0 4px 1px; }
+.frc .fd { padding: 1px 4px 0; }
+.rin .frc { font-size: .85em; }
