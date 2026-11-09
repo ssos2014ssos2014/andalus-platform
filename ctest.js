@@ -115,26 +115,91 @@
     plan.push({ title: "بعد ذلك — التثبيت", items: [`${t.prac} على اختبار شامل كل ٣ أيام بالوقت الكامل.`, strong.length ? `نقاط قوت${t.you}: ${strong.slice(0, 4).map(s => s.skill).join("، ")} — ${t.keep} عليها بالمراجعة الخفيفة.` : `استمر${female ? "ي" : ""} حتى تصبح كل مهارة فوق ٨٥٪.`] });
     return { weak, mid, strong, tips, plan };
   }
-  // تقرير الطالب الفردي في الاختبار المنشأ (يُستخدم في صفحة الاستعلام وفي لوحة المعلم)
+  // تقرير الطالب الفردي في الاختبار المنشأ (يُستخدم في صفحة الاستعلام وفي لوحة المعلم والطباعة)
+  function donut(p, size, label) {
+    const r = 42, c = 2 * Math.PI * r, col = band(p)[1];
+    return `<svg class="rp-donut" viewBox="0 0 100 100" width="${size}" height="${size}" role="img" aria-label="${AR(p)}٪"><circle cx="50" cy="50" r="${r}" fill="none" stroke="#e8eef0" stroke-width="11"/>
+      <circle cx="50" cy="50" r="${r}" fill="none" stroke="${col}" stroke-width="11" stroke-linecap="round" stroke-dasharray="${(c * p / 100).toFixed(1)} ${c.toFixed(1)}" transform="rotate(-90 50 50)"/>
+      <text x="50" y="${label ? 52 : 57}" text-anchor="middle" font-size="${label ? 21 : 23}" font-weight="800" fill="${col}" font-family="Tajawal,Tahoma,sans-serif">${AR(p)}٪</text>${label ? `<text x="50" y="69" text-anchor="middle" font-size="10" fill="#6b7c84" font-family="Tajawal,Tahoma,sans-serif">${esc(label)}</text>` : ""}</svg>`;
+  }
+  const rbar = (lbl, p, note) => `<div class="rp-bar"><span class="rp-lbl">${esc(lbl)}${note ? `<small>${esc(note)}</small>` : ""}</span><span class="rp-track"><i style="width:${p}%;background:${band(p)[1]}"></i></span><b style="color:${band(p)[1]}">${AR(p)}٪</b></div>`;
   function reportHtml(d) {
     const female = d.school === "asma", an = analyze(d.sections, d.answers), [bt, bc] = band(an.pct), adv = advice(an, female);
-    const bar = (p) => `<span style="display:inline-block;width:120px;height:9px;border-radius:9px;background:#eee;vertical-align:middle;overflow:hidden"><i style="display:block;height:100%;width:${p}%;background:${band(p)[1]}"></i></span>`;
     const wrongs = d.sections.flatMap((s, si) => s.questions.map((q, qi) => ({ q, s, si, qi, ch: d.answers[si] && d.answers[si][qi] })).filter(x => x.ch !== x.q.correct));
-    return `      <section class="panel" style="text-align:center"><p class="eyebrow" style="margin:0">${esc(d.title)}</p><h1 style="margin:6px 0">${esc(d.student)}</h1>
-        <div style="font-size:3.2rem;font-weight:800;color:${bc}">${AR(an.pct)}٪</div><div style="font-size:1.2rem;font-weight:700;color:${bc}">${bt}</div>
-        <p class="muted">أجبت إجابة صحيحة عن ${AR(an.score)} من ${AR(an.total)} سؤالًا.</p>
-        <div class="row" style="justify-content:center;gap:10px;flex-wrap:wrap">${an.subj.map(s => `<div class="panel" style="margin:0;padding:10px 16px"><strong>${s.sub === "quant" ? "الكمي" : "اللفظي"}</strong><div style="font-size:1.5rem;font-weight:800;color:${CTEST.band(s.pct)[1]}">${AR(s.pct)}٪</div><span class="small muted">${AR(s.ok)} / ${AR(s.n)}</span></div>`).join("")}</div></section>
-      <section class="panel"><h2>📋 الأداء في كل قسم</h2><div class="table-wrap"><table><thead><tr><th>القسم</th><th>الصحيح</th><th>النسبة</th></tr></thead><tbody>${an.bySec.map(s => `<tr><td>${esc(s.name)}</td><td>${AR(s.ok)} / ${AR(s.n)}</td><td>${bar(s.pct)} ${AR(s.pct)}٪</td></tr>`).join("")}</tbody></table></div></section>
-      <section class="panel"><h2>🔍 تحليل المهارات</h2><div class="table-wrap"><table><thead><tr><th>المهارة</th><th>المحاضرة</th><th>الصحيح</th><th>المستوى</th></tr></thead><tbody>${an.skills.map(s => `<tr><td>${esc(s.skill)}</td><td class="small">${esc(s.ltitle)}</td><td>${AR(s.ok)} / ${AR(s.n)}</td><td>${bar(s.pct)} <span class="small" style="color:${CTEST.band(s.pct)[1]}">${CTEST.band(s.pct)[0]}</span></td></tr>`).join("")}</tbody></table></div>
-        ${adv.strong.length ? `<p>💪 <strong>نقاط القوة:</strong> ${adv.strong.map(s => esc(s.skill)).join("، ")}</p>` : ""}
-        ${adv.weak.length ? `<p>⚠️ <strong>تحتاج إلى علاج:</strong> ${adv.weak.map(s => esc(s.skill)).join("، ")}</p>` : `<p>🌟 لا توجد مهارة تحت ٦٠٪، أحسنت!</p>`}</section>
-      <section class="panel"><h2>💡 نصائح وتوصيات</h2><ul style="line-height:2">${adv.tips.map(t => `<li>${esc(t)}</li>`).join("")}</ul></section>
-      <section class="panel"><h2>🗓 الخطة العلاجية المقترحة</h2>${adv.plan.map(p => `<h3 style="margin:10px 0 4px;color:#1f6f78">${esc(p.title)}</h3><ul style="line-height:2;margin:0">${p.items.map(i => `<li>${esc(i)}</li>`).join("")}</ul>`).join("")}</section>
-      <section class="panel"><h2>✍️ مراجعة الأسئلة الخاطئة (${AR(wrongs.length)})</h2>${wrongs.length ? wrongs.map(x => `<details style="border:1px solid #eee;border-radius:12px;padding:10px 14px;margin:8px 0"><summary style="cursor:pointer"><strong>${esc(x.s.name)} — السؤال ${AR(x.qi + 1)}</strong> <span class="small muted">· ${esc(x.q.skill)}</span></summary>
-        <div class="qbody" style="margin-top:8px">${toHtml(x.q.body)}</div>
-        <p>إجابتك: <strong style="color:#c0392b">${x.ch == null ? "لم تُجب" : toHtml(x.q.options[x.ch])}</strong> · الصحيحة: <strong style="color:#1e8449">${toHtml(x.q.options[x.q.correct])}</strong></p>
-        <ol style="line-height:1.9">${(x.q.steps || []).map(st => `<li>${toHtml(st)}</li>`).join("")}</ol>
-        <p class="small muted">📺 للمراجعة: ${esc(x.q.ltitle)} — من الدقيقة ${CTEST.mmss(x.q.from)}</p></details>`).join("") : "<p>لا توجد أخطاء 🎉</p>"}</section>`;
+    const blank = d.sections.reduce((t, s, si) => t + s.questions.filter((_, qi) => d.answers[si] == null || d.answers[si][qi] == null).length, 0);
+    return `<div class="rp">
+      <section class="panel rp-hero">
+        <div class="rp-hero-main">${donut(an.pct, 150, "النتيجة الكلية")}
+          <div><p class="rp-eyebrow">${esc(d.title)}</p><h1 class="rp-name">${esc(d.student)}</h1>
+            <span class="rp-band" style="background:${bc}">${bt}</span>
+            <div class="rp-facts"><span>✔️ صحيح <b>${AR(an.score)}</b></span><span>✖️ خطأ <b>${AR(an.total - an.score - blank)}</b></span><span>⭕ متروك <b>${AR(blank)}</b></span><span>📝 من <b>${AR(an.total)}</b></span></div></div></div>
+        ${an.subj.length ? `<div class="rp-subj">${an.subj.map(s => `<div>${donut(s.pct, 96, s.sub === "quant" ? "الكمي" : "اللفظي")}<small>${AR(s.ok)} / ${AR(s.n)}</small></div>`).join("")}</div>` : ""}
+      </section>
+      <div class="rp-cols">
+        <section class="panel"><h2>📋 الأداء في كل قسم</h2>${an.bySec.map(s => rbar(s.name, s.pct, `${AR(s.ok)} من ${AR(s.n)}`)).join("")}</section>
+        <section class="panel"><h2>🧭 ملخص المستوى</h2>
+          ${adv.strong.length ? `<p class="rp-tag ok">💪 <b>نقاط القوة:</b> ${adv.strong.slice(0, 6).map(s => esc(s.skill)).join("، ")}</p>` : ""}
+          ${adv.mid.length ? `<p class="rp-tag mid">📈 <b>تحتاج إلى تقوية:</b> ${adv.mid.slice(0, 6).map(s => esc(s.skill)).join("، ")}</p>` : ""}
+          ${adv.weak.length ? `<p class="rp-tag bad">⚠️ <b>تحتاج إلى علاج:</b> ${adv.weak.slice(0, 6).map(s => esc(s.skill)).join("، ")}</p>` : `<p class="rp-tag ok">🌟 لا توجد مهارة تحت ٦٠٪، أحسنت!</p>`}</section>
+      </div>
+      <section class="panel"><h2>🔍 تحليل المهارات</h2><div class="rp-chart">${an.skills.map(s => rbar(s.skill, s.pct, `${s.ltitle} · ${AR(s.ok)} / ${AR(s.n)}`)).join("")}</div></section>
+      <section class="panel"><h2>💡 نصائح وتوصيات</h2><ul class="rp-list">${adv.tips.map(t => `<li>${esc(t)}</li>`).join("")}</ul></section>
+      <section class="panel"><h2>🗓 الخطة العلاجية المقترحة</h2>${adv.plan.map(p => `<div class="rp-plan"><h3>${esc(p.title)}</h3><ul class="rp-list">${p.items.map(i => `<li>${esc(i)}</li>`).join("")}</ul></div>`).join("")}</section>
+      <section class="panel"><h2>✍️ مراجعة الأسئلة الخاطئة (${AR(wrongs.length)})</h2>${wrongs.length ? wrongs.map(x => `<details class="rp-q"><summary><b>${esc(x.s.name)} — السؤال ${AR(x.qi + 1)}</b> <span class="small muted">· ${esc(x.q.skill)}</span></summary>
+        <div class="qbody">${toHtml(x.q.body)}</div>
+        <div class="rp-ans"><span class="bad">إجابتك: <b>${x.ch == null ? "لم تُجب" : toHtml(x.q.options[x.ch])}</b></span><span class="good">الصحيحة: <b>${toHtml(x.q.options[x.q.correct])}</b></span></div>
+        <ol class="rp-steps">${(x.q.steps || []).map(st => `<li>${toHtml(st)}</li>`).join("")}</ol>
+        <p class="small muted">📺 للمراجعة: ${esc(x.q.ltitle)} — من الدقيقة ${mmss(x.q.from)}</p></details>`).join("") : "<p>لا توجد أخطاء 🎉</p>"}</section>
+    </div>`;
   }
-  window.CTEST = { LEVELS, LETTERS, AR, esc, toHtml, generate, analyze, band, advice, mmss, reportHtml };
+
+  // ---------- طباعة التقارير بكليشة رسمية ثابتة أعلى كل صفحة وتوقيعات المسؤولين في آخر كل تقرير ----------
+  // opt: { title, sub, school, parts: [html, ...], landscape }
+  function printDoc(opt) {
+    const key = opt.school || (window.SCHOOL && window.SCHOOL.key) || "andalus";
+    const S = (window.SCHOOLS_INFO && window.SCHOOLS_INFO[key]) || window.SCHOOL || {}, C = window.CERT ? window.CERT.school(key) : { name: S.name, sign: [] };
+    const base = location.href.replace(/[?#].*$/, "").replace(/[^/]*$/, ""), logo = new URL(S.logo || "logo.png", base).href, moe = new URL("moe-logo.png", base).href;
+    const now = new Date(), d = window.CERT ? window.CERT.fmtDate(now.toISOString()) : { hij: "", gr: now.toLocaleDateString("ar-SA") };
+    const signs = (C.sign || []).map(([r, n]) => `<div class="sg"><b>${esc(r)}</b><i></i><span>${esc(n)}</span></div>`).join("");
+    const head = `<div class="lh"><div class="lh-r"><b>المملكة العربية السعودية</b><b>وزارة التعليم</b><b>الإدارة العامة للتعليم بمنطقة عسير</b><b>${esc(C.name || S.name || "")}</b></div>
+      <div class="lh-c"><img src="${moe}" alt="وزارة التعليم"></div>
+      <div class="lh-l"><img src="${logo}" alt=""><span>${esc(d.hij)}</span><span>الموافق ${esc(d.gr)}</span></div></div><div class="lh-rule"><i></i><i></i></div>`;
+    const parts = (opt.parts || []).map((p, i, a) => `<section class="part${i < a.length - 1 ? " brk" : ""}">${p}<div class="signs">${signs}</div></section>`).join("");
+    const w = window.open("", "_blank"); if (!w) return alert("اسمح بالنوافذ المنبثقة للطباعة.");
+    w.document.write(`<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>${esc(opt.title || "تقرير")}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="${base}styles.css">
+<style>
+:root{--ink:#13293d;--ink-2:#3d5468;--muted:#6b7f8e;--tile:#1d6a84;--tile-deep:#144f63;--tile-soft:#e2eff3;--saffron:#c38b2a;--saffron-soft:#f6ead3;--paper:#fff;--surface:#fff;--line:#d7e0e4;--ok:#2c7a55;--warn:#b5523c;color-scheme:light}
+@page{size:A4 ${opt.landscape ? "landscape" : "portrait"};margin:9mm 10mm 10mm}
+*{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+html,body{background:#fff!important;color:#13293d;margin:0;font-family:Tajawal,"Noto Kufi Arabic",Tahoma,sans-serif}
+table.doc{width:100%;border-collapse:collapse}table.doc>thead>tr>td,table.doc>tfoot>tr>td,table.doc>tbody>tr>td{padding:0;border:0;text-align:initial;background:none}
+.lh{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:12px;padding:4px 6px 6px}
+.lh-r,.lh-l{display:flex;flex-direction:column;align-items:center;text-align:center;line-height:1.55;font-size:12.5px}
+.lh-r b{font-weight:800;color:#144f63}.lh-l b{font-weight:700;color:#7a5a12}.lh-l span{color:#566;font-size:11.5px}
+.lh-c img{height:84px;max-width:150px;object-fit:contain}.lh-l img{height:50px;max-width:150px;object-fit:contain;margin-bottom:3px}
+.lh-rule{margin:0 0 10px}.lh-rule i{display:block;height:3px;background:linear-gradient(90deg,#e8c766,#b8862b,#e8c766)}.lh-rule i+i{height:1px;margin-top:2px;background:#1f6f78}
+.ft{border-top:1px solid #c9a54a;margin-top:8px;padding-top:4px;display:flex;justify-content:space-between;font-size:10.5px;color:#6b7c84}
+.doc-title{text-align:center;margin:2px 0 12px}.doc-title h1{margin:0;font-size:21px;color:#144f63}.doc-title p{margin:2px 0 0;color:#6b7c84;font-size:12.5px}
+.part.brk{break-after:page}
+.signs{display:grid;grid-template-columns:repeat(${Math.max(1, (C.sign || []).length)},1fr);gap:18px;margin-top:26px;break-inside:avoid}
+.sg{text-align:center;font-size:13px}.sg b{display:block;color:#7a5a12}.sg i{display:block;border-bottom:1.3px dashed #c9a54a;height:34px;margin:0 18%}.sg span{display:block;font-weight:700;margin-top:5px;color:#173a4a}
+.panel{box-shadow:none!important;border:1px solid #dfe7ea!important;border-radius:12px!important;padding:12px 14px!important;margin:0 0 10px!important;background:#fff!important;break-inside:auto}
+.panel h2{font-size:16px;margin:0 0 8px;color:#144f63;break-after:avoid}
+.kpis{grid-template-columns:repeat(3,1fr)!important;gap:8px!important;break-inside:avoid}.stat{box-shadow:none!important;padding:8px 10px!important}.stat .v{font-size:19px!important}
+.ana-grid{grid-template-columns:1fr 1fr!important;gap:10px!important}.ana-grid>.panel{break-inside:avoid}
+table{font-size:12px}thead{display:table-header-group}tr,.review li,.ana-row,details{break-inside:avoid}
+.table-wrap{overflow:visible!important;border-radius:10px}.table-wrap th{background:#e2eff3!important}
+.btn,.linkbtn,.ana-noprint,button{display:none!important}
+details>summary{list-style:none;font-weight:700}
+</style></head><body><table class="doc"><thead><tr><td>${head}</td></tr></thead>
+<tfoot><tr><td><div class="ft"><span>${esc(C.name || S.name || "")} — منصة التأسيس والتدريب لاختبار القدرات العامة</span><span>طُبع في ${esc(d.hij)}</span></div></td></tr></tfoot>
+<tbody><tr><td><div class="doc-title"><h1>${esc(opt.title || "")}</h1>${opt.sub ? `<p>${esc(opt.sub)}</p>` : ""}</div>${parts}</td></tr></tbody></table>
+<script>document.querySelectorAll("details").forEach(x=>x.open=true);let k=0;const go=()=>{if(k++)return;print()};(document.fonts?document.fonts.ready:Promise.resolve()).then(()=>setTimeout(go,600));setTimeout(go,3000)<\/script></body></html>`);
+    w.document.close();
+    // صيغة المؤنث في منصة الطالبات
+    if (window.feminize && S.female) { const walk = n => { if (n.nodeType === 3) n.nodeValue = window.feminize(n.nodeValue); else if (n.nodeType === 1 && !/^(SCRIPT|STYLE)$/i.test(n.tagName)) n.childNodes.forEach(walk); }; try { walk(w.document.body); } catch {} }
+  }
+  window.CTEST = { LEVELS, LETTERS, AR, esc, toHtml, generate, analyze, band, advice, mmss, reportHtml, printDoc };
 })();

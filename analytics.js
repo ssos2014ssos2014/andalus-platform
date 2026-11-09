@@ -66,11 +66,8 @@
     box.addEventListener("click", e => { if (e.target === box) close(); });
     document.body.append(box);
   }
-  function printNode(title, node) {
-    const w = window.open("", "_blank"); if (!w) return alert("اسمح بالنوافذ المنبثقة للطباعة.");
-    const base = location.href.replace(/[^/]*$/, "");
-    w.document.write(`<!doctype html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>${CTEST.esc(title)}</title><base href="${base}"><link rel="stylesheet" href="styles.css"><link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&display=swap" rel="stylesheet"><style>body{background:#fff}main{max-width:960px;margin:auto;padding:16px}.ana-noprint{display:none}details{display:block}details>*{display:block}</style></head><body><main><h1 style="margin-top:0">${CTEST.esc(title)}</h1><p class="small muted">${CTEST.esc(X.SCHOOL.name || "")} · ${new Date().toLocaleDateString("ar-SA-u-nu-arab")}</p>${node.innerHTML}</main><script>document.querySelectorAll("details").forEach(d=>d.open=true);setTimeout(()=>print(),700)<\/script></body></html>`);
-    w.document.close();
+  function printNode(title, node, parts) {
+    CTEST.printDoc({ title, sub: X.SCHOOL.name, school: X.SCHOOL.key, parts: parts || [node.innerHTML] });
   }
 
   // =====================================================================
@@ -335,9 +332,7 @@
     modal(`تقرير ${r.name} — ${exam.title}`, body);
   }
   function allReports(exam, ranked) {
-    const box = document.createElement("div");
-    box.innerHTML = ranked.map(r => `<div style="page-break-after:always">${CTEST.reportHtml({ title: exam.title, student: r.name, school: r.students?.school || X.SCHOOL.key, sections: exam.sections, answers: r.answers })}</div>`).join("");
-    printNode(`تقارير الطلاب — ${exam.title}`, box);
+    printNode(`تقارير الطلاب — ${exam.title}`, null, ranked.map(r => CTEST.reportHtml({ title: exam.title, student: r.name, school: r.students?.school || X.SCHOOL.key, sections: exam.sections, answers: r.answers })));
   }
   function exportExam(exam, results, skills, items) {
     const wb = XLSX.utils.book_new();

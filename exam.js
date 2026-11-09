@@ -80,7 +80,8 @@
   function viewResult(d) {
     app.innerHTML = `${head("نتيجة: " + d.title)}<main class="wrap" style="max-width:900px">
 ${CTEST.reportHtml(d)}
-      <p style="text-align:center"><button class="btn ghost" onclick="print()">🖨 طباعة التقرير</button></p></main>`;
+      <p style="text-align:center"><button class="btn ghost" id="prt">🖨 طباعة التقرير / حفظ PDF</button></p></main>`;
+    app.querySelector("#prt").onclick = () => CTEST.printDoc({ title: "تقرير نتيجة اختبار", sub: d.title, school: d.school, parts: [CTEST.reportHtml(d)] });
   }
   const pre = toLatinDigits(qp.get("n") || "");
   if (pre && S.code) { S.nid = pre; (S.mode === "result" ? openResult() : openExam()).catch(e => { S.error = e.message; viewLogin(); }); } else viewLogin();
