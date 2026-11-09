@@ -731,22 +731,35 @@
     return String(str ?? "").split(/([⁰¹²³⁴⁵⁶⁷⁸⁹]+)/).filter(Boolean).map(part =>
       SUPS.includes(part[0]) ? h("sup", { class: "ex" }, [...part].map(c => "٠١٢٣٤٥٦٧٨٩"[SUPS.indexOf(c)]).join("")) : ARD(part));
   }
-  // الكسور تُكتب ⟦بسط/مقام⟧ وتُعرض كسرًا رأسيًا
-  function rtPlain(str) {
-    return String(str ?? "").split(/(⟦[^⟧]*⟧)/).filter(Boolean).flatMap(part => {
-      const m = part.match(/^⟦([^/⟧]*)\/([^⟧]*)⟧$/);
-      return m ? [h("span", { class: "frc" }, h("span", { class: "fn" }, rtSup(m[1])), h("span", { class: "fd" }, rtSup(m[2])))] : rtSup(part);
-    });
+  // الكسور تُكتب ⟦بسط/مقام⟧ والجذور ⁿ√{…} ، ويمكن أن يتداخلا (جذر داخل كسر أو كسر داخل جذر)
+  function mathTok(s) {
+    s = String(s ?? ""); const out = []; let buf = "", i = 0;
+    const flush = () => { if (buf) out.push({ t: "x", v: buf }); buf = ""; };
+    const close = (j, o, c) => { let d = 0; for (; j < s.length; j++) { if (s[j] === o) d++; else if (s[j] === c && --d === 0) return j; } return -1; };
+    while (i < s.length) {
+      if (s[i] === "√" && s[i + 1] === "{") {
+        const j = close(i + 1, "{", "}"); if (j < 0) { buf += s[i++]; continue; }
+        const mm = buf.match(/[⁰¹²³⁴⁵⁶⁷⁸⁹]+$/), idx = mm ? mm[0] : ""; if (idx) buf = buf.slice(0, -idx.length);
+        flush(); out.push({ t: "r", idx, v: mathTok(s.slice(i + 2, j)) }); i = j + 1; continue;
+      }
+      if (s[i] === "⟦") {
+        const j = close(i, "⟦", "⟧"); if (j < 0) { buf += s[i++]; continue; }
+        const inner = s.slice(i + 1, j); let d = 0, k = -1;
+        for (let q = 0; q < inner.length; q++) { const c = inner[q]; if (c === "{" || c === "⟦") d++; else if (c === "}" || c === "⟧") d--; else if (c === "/" && d === 0) { k = q; break; } }
+        if (k < 0) { buf += s.slice(i, j + 1); i = j + 1; continue; }
+        flush(); out.push({ t: "f", n: mathTok(inner.slice(0, k)), d: mathTok(inner.slice(k + 1)) }); i = j + 1; continue;
+      }
+      buf += s[i++];
+    }
+    flush(); return out;
   }
-  // الجذور تُكتب ⁿ√{…} وتُعرض بعلامة جذر عربية (مقلوبة) وخط فوق ما تحتها
-  function rt(str) {
-    return String(str ?? "").split(/((?:[⁰¹²³⁴⁵⁶⁷⁸⁹]*)√\{[^}]*\})/).filter(Boolean).flatMap(part => {
-      const m = part.match(/^([⁰¹²³⁴⁵⁶⁷⁸⁹]*)√\{([^}]*)\}$/);
-      if (!m) return rtPlain(part);
-      const idx = m[1] ? [...m[1]].map(c => "٠١٢٣٤٥٦٧٨٩"[SUPS.indexOf(c)]).join("") : "";
-      return [h("span", { class: "rad" }, h("span", { class: "rsign" }, idx && h("sup", { class: "ridx" }, idx), h("span", { class: "rs" }, "√")), h("span", { class: "rin" }, rtPlain(m[2])))];
-    });
+  function rtNodes(ns) {
+    return ns.flatMap(n => n.t === "x" ? rtSup(n.v)
+      : n.t === "f" ? [h("span", { class: "frc" }, h("span", { class: "fn" }, rtNodes(n.n)), h("span", { class: "fd" }, rtNodes(n.d)))]
+      : [h("span", { class: "rad" }, h("span", { class: "rsign" }, n.idx && h("sup", { class: "ridx" }, [...n.idx].map(c => "٠١٢٣٤٥٦٧٨٩"[SUPS.indexOf(c)]).join("")), h("span", { class: "rs" }, "√")), h("span", { class: "rin" }, rtNodes(n.v)))]);
   }
+  function rtPlain(str) { return rtNodes(mathTok(str)); }
+  function rt(str) { return rtNodes(mathTok(str)); }
   const tfmt = sec => ARD(ExamEngine.fmtTime(Math.max(0, Math.round(sec))));
   const saveSim = () => ss.set(SIMKEY, S.sim ? JSON.stringify(S.sim) : null);
   async function startSim(l) {

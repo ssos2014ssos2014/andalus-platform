@@ -7,15 +7,36 @@
   const SUPS = "⁰¹²³⁴⁵⁶⁷⁸⁹";
   // ---------- تحويل رموز الأسئلة (الجذور والكسور والأسس) إلى HTML ----------
   function supHtml(s) { return esc(s).replace(/[⁰¹²³⁴⁵⁶⁷⁸⁹]+/g, m => `<sup class="ex">${[...m].map(c => "٠١٢٣٤٥٦٧٨٩"[SUPS.indexOf(c)]).join("")}</sup>`); }
-  function plain(s) { return String(s ?? "").split(/(⟦[^⟧]*⟧)/).map(p => { const m = p.match(/^⟦([^/⟧]*)\/([^⟧]*)⟧$/); return m ? `<span class="frc"><span class="fn">${supHtml(m[1])}</span><span class="fd">${supHtml(m[2])}</span></span>` : supHtml(p); }).join(""); }
-  function toHtml(s) {
-    return String(s ?? "").split(/((?:[⁰¹²³⁴⁵⁶⁷⁸⁹]*)√\{[^}]*\})/).map(p => {
-      const m = p.match(/^([⁰¹²³⁴⁵⁶⁷⁸⁹]*)√\{([^}]*)\}$/);
-      if (!m) return plain(p).replace(/\n/g, "<br>");
-      const idx = m[1] ? `<sup class="ridx">${[...m[1]].map(c => "٠١٢٣٤٥٦٧٨٩"[SUPS.indexOf(c)]).join("")}</sup>` : "";
-      return `<span class="rad"><span class="rsign">${idx}<span class="rs">√</span></span><span class="rin">${plain(m[2])}</span></span>`;
-    }).join("");
+  // الكسور ⟦بسط/مقام⟧ والجذور ⁿ√{…} مع دعم التداخل بينهما
+  function mathTok(s) {
+    s = String(s ?? ""); const out = []; let buf = "", i = 0;
+    const flush = () => { if (buf) out.push({ t: "x", v: buf }); buf = ""; };
+    const close = (j, o, c) => { let d = 0; for (; j < s.length; j++) { if (s[j] === o) d++; else if (s[j] === c && --d === 0) return j; } return -1; };
+    while (i < s.length) {
+      if (s[i] === "√" && s[i + 1] === "{") {
+        const j = close(i + 1, "{", "}"); if (j < 0) { buf += s[i++]; continue; }
+        const mm = buf.match(/[⁰¹²³⁴⁵⁶⁷⁸⁹]+$/), idx = mm ? mm[0] : ""; if (idx) buf = buf.slice(0, -idx.length);
+        flush(); out.push({ t: "r", idx, v: mathTok(s.slice(i + 2, j)) }); i = j + 1; continue;
+      }
+      if (s[i] === "⟦") {
+        const j = close(i, "⟦", "⟧"); if (j < 0) { buf += s[i++]; continue; }
+        const inner = s.slice(i + 1, j); let d = 0, k = -1;
+        for (let q = 0; q < inner.length; q++) { const c = inner[q]; if (c === "{" || c === "⟦") d++; else if (c === "}" || c === "⟧") d--; else if (c === "/" && d === 0) { k = q; break; } }
+        if (k < 0) { buf += s.slice(i, j + 1); i = j + 1; continue; }
+        flush(); out.push({ t: "f", n: mathTok(inner.slice(0, k)), d: mathTok(inner.slice(k + 1)) }); i = j + 1; continue;
+      }
+      buf += s[i++];
+    }
+    flush(); return out;
   }
+  const digAr = m => [...m].map(c => "٠١٢٣٤٥٦٧٨٩"[SUPS.indexOf(c)]).join("");
+  function nodesHtml(ns) {
+    return ns.map(n => n.t === "x" ? supHtml(n.v).replace(/\n/g, "<br>")
+      : n.t === "f" ? `<span class="frc"><span class="fn">${nodesHtml(n.n)}</span><span class="fd">${nodesHtml(n.d)}</span></span>`
+      : `<span class="rad"><span class="rsign">${n.idx ? `<sup class="ridx">${digAr(n.idx)}</sup>` : ""}<span class="rs">√</span></span><span class="rin">${nodesHtml(n.v)}</span></span>`).join("");
+  }
+  function plain(s) { return nodesHtml(mathTok(s)); }
+  function toHtml(s) { return nodesHtml(mathTok(s)); }
   // ---------- مولد عشوائي بمستوى صعوبة ----------
   function levelR(R, L) {
     if (!L) return R;
