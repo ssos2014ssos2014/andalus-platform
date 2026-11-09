@@ -126,7 +126,7 @@
   }
 
   // ---------- الإطار ----------
-  const TABS = [["dashboard", "لوحة المؤشرات"], ["students", "الطلاب"], ["certs", "🏅 الشهادات"], ["ctests", "🧪 إنشاء اختبار"], ["questions", "الأسئلة"], ["lectures", "المحاضرات"], ["results", "النتائج"], ["settings", "الإعدادات"]];
+  const TABS = [["dashboard", "لوحة المؤشرات"], ["students", "الطلاب"], ["certs", "🏅 الشهادات"], ["ctests", "🧪 إنشاء اختبار"], ["questions", "الأسئلة"], ["lectures", "المحاضرات"], ["results", "📊 النتائج والتحليل"], ["settings", "الإعدادات"]];
   async function render() {
     if (!A.super && ["questions", "lectures", "settings"].includes(A.tab)) A.tab = "dashboard";
     const body = h("div", null, h("div", { class: "loading" }, "جارٍ التحميل…"));
@@ -862,47 +862,16 @@
     draw(); return wrap;
   }
 
+  // ---------- النتائج والتحليل (analytics.js) ----------
   async function tabResults() {
-    const f = h("input", { type: "text", placeholder: "رقم هوية طالب (اختياري)" });
-    const ls = h("select", null, h("option", { value: "" }, "كل المحاضرات"), A.lectures.map(l => h("option", { value: String(l.id) }, l.title)));
-    const out = h("div");
-    let rows = [];
-    async function load() {
-      let q = sb.from("attempts").select("id, submitted_at, national_id, lecture_id, score, total, percent, passed, students!inner(full_name, phone, school)").eq("students.school", SCHOOL.key).neq("national_id", TEST_ID)
-        .not("submitted_at", "is", null).order("submitted_at", { ascending: false }).limit(1000);
-      if (f.value.trim()) q = q.eq("national_id", toLatinDigits(f.value));
-      if (ls.value) q = q.eq("lecture_id", +ls.value);
-      const { data, error } = await q; if (error) throw error;
-      rows = data;
-      out.replaceChildren(data.length ? h("div", { class: "table-wrap" }, h("table", null,
-        h("thead", null, h("tr", null, ["التاريخ", "الطالب", "رقم الهوية", "المحاضرة", "الدرجة", "النسبة", "النتيجة", ""].map(x => h("th", null, x)))),
-        h("tbody", null, data.map(r => h("tr", null,
-          h("td", { class: "small" }, new Date(r.submitted_at).toLocaleString("ar-SA-u-nu-latn")),
-          h("td", null, r.students?.full_name || ""), h("td", null, r.national_id),
-          h("td", null, r.lecture_id), h("td", null, `${r.score}/${r.total}`), h("td", null, r.percent + "%"),
-          h("td", { class: r.passed ? "chip-pass" : "chip-fail" }, r.passed ? "اجتاز" : "يحتاج مراجعة"),
-          h("td", { style: "white-space:nowrap" }, h("div", { class: "row", style: "gap:6px;flex-wrap:nowrap" },
-            wa(r.students?.phone, r.students?.full_name || "", `السلام عليكم ${r.students?.full_name || ""}،\nنتيجتك في اختبار المحاضرة ${r.lecture_id}: ${r.score} من ${r.total} (${r.percent}%).\n`),
-            h("button", { class: "btn ghost sm", "aria-label": "حذف هذا الاختبار", onclick: async () => {
-              if (!confirm(`حذف اختبار ${r.students?.full_name || r.national_id} في المحاضرة ${r.lecture_id}؟`)) return;
-              const { error } = await sb.from("attempts").delete().eq("id", r.id);
-              if (error) return flash("err", error.message);
-              load().catch(e => flash("err", e.message));
-            } }, "حذف"))))))))
-        : h("p", { class: "muted" }, "لا توجد اختبارات مسلَّمة بهذه الشروط بعد."));
-    }
-    await load();
-    return h("section", { class: "panel" },
-      h("h2", null, "نتائج الاختبارات"),
-      h("div", { class: "grid2" }, f, ls),
-      h("div", { class: "row", style: "margin:12px 0" },
-        h("button", { class: "btn", onclick: () => load().catch(e => flash("err", e.message)) }, "عرض النتائج"),
-        h("button", { class: "btn ghost", onclick: () => {
-          const ws = XLSX.utils.json_to_sheet(rows.map(r => ({ "التاريخ": new Date(r.submitted_at).toLocaleString("ar-SA-u-nu-latn"), "الطالب": r.students?.full_name || "",
-            "رقم الهوية": r.national_id, "المحاضرة": r.lecture_id, "الدرجة": r.score, "من": r.total, "النسبة": r.percent, "النتيجة": r.passed ? "اجتاز" : "يحتاج مراجعة" })));
-          const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "النتائج"); XLSX.writeFile(wb, "نتائج-الاختبارات.xlsx");
-        } }, "تصدير إلى Excel")),
-      out);
+    const sub = A.resSub ||= "training";
+    const ctx = { h, sb, AR, flash, SCHOOL, TEST_ID, lectures: A.lectures, wa, state: A, rerender: render };
+    const bar = h("div", { class: "row", style: "gap:8px;flex-wrap:wrap;margin-bottom:14px" },
+      h("button", { class: sub === "training" ? "btn" : "btn ghost", onclick: () => { A.resSub = "training"; render(); } }, "🎯 التدريب على المحاضرات"),
+      h("button", { class: sub === "custom" ? "btn" : "btn ghost", onclick: () => { A.resSub = "custom"; render(); } }, "🧪 الاختبارات المنشأة"));
+    if (!window.ANALYTICS) return h("div", { class: "alert err" }, "ملف analytics.js غير موجود. ارفعه مع ملفات التحديث.");
+    const body = sub === "custom" ? await ANALYTICS.custom(ctx) : await ANALYTICS.training(ctx);
+    return h("div", null, bar, body);
   }
 
   // ---------- الإعدادات ----------

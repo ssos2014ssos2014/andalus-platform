@@ -78,25 +78,8 @@
     const d = await rpc("custom_result", { p_code: S.code, p_nid: S.nid }); viewResult(d);
   }
   function viewResult(d) {
-    const female = d.school === "asma", an = CTEST.analyze(d.sections, d.answers), [bt, bc] = CTEST.band(an.pct), adv = CTEST.advice(an, female);
-    const bar = (p) => `<span style="display:inline-block;width:120px;height:9px;border-radius:9px;background:#eee;vertical-align:middle;overflow:hidden"><i style="display:block;height:100%;width:${p}%;background:${CTEST.band(p)[1]}"></i></span>`;
-    const wrongs = d.sections.flatMap((s, si) => s.questions.map((q, qi) => ({ q, s, si, qi, ch: d.answers[si] && d.answers[si][qi] })).filter(x => x.ch !== x.q.correct));
     app.innerHTML = `${head("نتيجة: " + d.title)}<main class="wrap" style="max-width:900px">
-      <section class="panel" style="text-align:center"><p class="eyebrow" style="margin:0">${esc(d.title)}</p><h1 style="margin:6px 0">${esc(d.student)}</h1>
-        <div style="font-size:3.2rem;font-weight:800;color:${bc}">${AR(an.pct)}٪</div><div style="font-size:1.2rem;font-weight:700;color:${bc}">${bt}</div>
-        <p class="muted">أجبت إجابة صحيحة عن ${AR(an.score)} من ${AR(an.total)} سؤالًا.</p>
-        <div class="row" style="justify-content:center;gap:10px;flex-wrap:wrap">${an.subj.map(s => `<div class="panel" style="margin:0;padding:10px 16px"><strong>${s.sub === "quant" ? "الكمي" : "اللفظي"}</strong><div style="font-size:1.5rem;font-weight:800;color:${CTEST.band(s.pct)[1]}">${AR(s.pct)}٪</div><span class="small muted">${AR(s.ok)} / ${AR(s.n)}</span></div>`).join("")}</div></section>
-      <section class="panel"><h2>📋 الأداء في كل قسم</h2><div class="table-wrap"><table><thead><tr><th>القسم</th><th>الصحيح</th><th>النسبة</th></tr></thead><tbody>${an.bySec.map(s => `<tr><td>${esc(s.name)}</td><td>${AR(s.ok)} / ${AR(s.n)}</td><td>${bar(s.pct)} ${AR(s.pct)}٪</td></tr>`).join("")}</tbody></table></div></section>
-      <section class="panel"><h2>🔍 تحليل المهارات</h2><div class="table-wrap"><table><thead><tr><th>المهارة</th><th>المحاضرة</th><th>الصحيح</th><th>المستوى</th></tr></thead><tbody>${an.skills.map(s => `<tr><td>${esc(s.skill)}</td><td class="small">${esc(s.ltitle)}</td><td>${AR(s.ok)} / ${AR(s.n)}</td><td>${bar(s.pct)} <span class="small" style="color:${CTEST.band(s.pct)[1]}">${CTEST.band(s.pct)[0]}</span></td></tr>`).join("")}</tbody></table></div>
-        ${adv.strong.length ? `<p>💪 <strong>نقاط القوة:</strong> ${adv.strong.map(s => esc(s.skill)).join("، ")}</p>` : ""}
-        ${adv.weak.length ? `<p>⚠️ <strong>تحتاج إلى علاج:</strong> ${adv.weak.map(s => esc(s.skill)).join("، ")}</p>` : `<p>🌟 لا توجد مهارة تحت ٦٠٪، أحسنت!</p>`}</section>
-      <section class="panel"><h2>💡 نصائح وتوصيات</h2><ul style="line-height:2">${adv.tips.map(t => `<li>${esc(t)}</li>`).join("")}</ul></section>
-      <section class="panel"><h2>🗓 الخطة العلاجية المقترحة</h2>${adv.plan.map(p => `<h3 style="margin:10px 0 4px;color:#1f6f78">${esc(p.title)}</h3><ul style="line-height:2;margin:0">${p.items.map(i => `<li>${esc(i)}</li>`).join("")}</ul>`).join("")}</section>
-      <section class="panel"><h2>✍️ مراجعة الأسئلة الخاطئة (${AR(wrongs.length)})</h2>${wrongs.length ? wrongs.map(x => `<details style="border:1px solid #eee;border-radius:12px;padding:10px 14px;margin:8px 0"><summary style="cursor:pointer"><strong>${esc(x.s.name)} — السؤال ${AR(x.qi + 1)}</strong> <span class="small muted">· ${esc(x.q.skill)}</span></summary>
-        <div class="qbody" style="margin-top:8px">${toHtml(x.q.body)}</div>
-        <p>إجابتك: <strong style="color:#c0392b">${x.ch == null ? "لم تُجب" : toHtml(x.q.options[x.ch])}</strong> · الصحيحة: <strong style="color:#1e8449">${toHtml(x.q.options[x.q.correct])}</strong></p>
-        <ol style="line-height:1.9">${(x.q.steps || []).map(st => `<li>${toHtml(st)}</li>`).join("")}</ol>
-        <p class="small muted">📺 للمراجعة: ${esc(x.q.ltitle)} — من الدقيقة ${CTEST.mmss(x.q.from)}</p></details>`).join("") : "<p>لا توجد أخطاء 🎉</p>"}</section>
+${CTEST.reportHtml(d)}
       <p style="text-align:center"><button class="btn ghost" onclick="print()">🖨 طباعة التقرير</button></p></main>`;
   }
   const pre = toLatinDigits(qp.get("n") || "");
