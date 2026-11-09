@@ -406,7 +406,7 @@
   // تشغيل ملف Drive نفسه داخل مشغّل الفيديو (بدل نافذة المعاينة) ليُقرأ الوقت بالثانية ويُعرف انتهاء المقطع.
   // إن تعذّر (حصة التنزيل في Drive أو المتصفح) يعود تلقائيًا إلى نافذة معاينة Drive.
   const ddUrl = id => `https://drive.usercontent.google.com/download?id=${encodeURIComponent(id)}&export=download&confirm=t`;
-  const driveDirect = (lid, pi, part) => !!(part && part.drive_id && !part.youtube_id && (S.pub || {}).drive_direct !== false && !(S.vfail || {})[`${lid}:${pi}`]);
+  const driveDirect = (lid, pi, part) => !!(part && part.drive_id && !part.youtube_id && (S.pub || {}).drive_direct === true && !(S.vfail || {})[`${lid}:${pi}`]);
   function player(l, part) {
     if (!part || !(part.youtube_id || part.url || part.drive_id)) {
       return h("div", { class: "video poster" }, h("div", { class: "poster-inner" },
@@ -495,15 +495,28 @@
     const label = h("strong", { id: "bm-label" }, saved ? tfmt(saved) : "لم تحفظ بعد");
     const note = h("span", { class: "small", "aria-live": "polite", style: "color:var(--ok)" });
     const saveBtn = h("button", { class: "btn", type: "submit" }, auto ? "⏸ أوقف واحفظ مكان توقفي" : "📌 احفظ مكان توقفي");
+    // بالون إرشادي يشير إلى خانتي الدقيقة والثانية (للمقاطع التي لا يُقرأ وقتها تلقائيًا)
+    const tip = h("div", { class: "bm-tip", role: "status", "aria-live": "polite", hidden: true },
+      h("button", { type: "button", class: "bm-tip-x", "aria-label": "إغلاق", onclick: () => hideTip() }, "×"),
+      h("strong", null, "اكتب وقت توقفك هنا 👆"),
+      h("span", null, "أوقف المقطع، ثم اكتب الدقيقة والثانية الظاهرتين في شريطه في هاتين الخانتين، ثم اضغط «احفظ مكان توقفي»."));
+    let tipTimer = null;
+    const hideTip = () => { tip.hidden = true; clearTimeout(tipTimer); mm.classList.remove("tm-hl"); sc.classList.remove("tm-hl"); };
+    const showTip = () => { tip.hidden = false; mm.classList.add("tm-hl"); sc.classList.add("tm-hl"); clearTimeout(tipTimer); tipTimer = setTimeout(hideTip, 12000); try { mm.focus({ preventScroll: true }); } catch {} tip.scrollIntoView({ behavior: "smooth", block: "nearest" }); };
+    mm.addEventListener("input", () => { if (!tip.hidden && (mm.value || sc.value)) hideTip(); });
+    sc.addEventListener("input", () => { if (!tip.hidden && (mm.value || sc.value)) hideTip(); });
     const form = h("form", { class: "bm-form", onsubmit: async e => {
       e.preventDefault();
       if (auto) {
         saveBtn.disabled = true;
         const t0 = await captureTime();
         saveBtn.disabled = false;
-        if (t0 == null) { note.style.color = "var(--warn)"; note.textContent = "تعذر قراءة الوقت من المشغّل، اكتبه يدويًا ثم اضغط احفظ."; auto = false; return; }
+        if (t0 == null) { auto = false; saveBtn.textContent = "📌 احفظ مكان توقفي"; showTip(); return; }
         mm.value = String(Math.floor(t0 / 60)); sc.value = String(t0 % 60).padStart(2, "0");
       }
+      // في الإدخال اليدوي: إن ضغط الطالب الزر والخانتان فارغتان نعرض له البالون بدل حفظ ٠٠:٠٠
+      if (!auto && !String(mm.value).trim() && !String(sc.value).trim()) { showTip(); return; }
+      hideTip();
       const m = parseInt(toLatinDigits(mm.value) || "0", 10), x = parseInt(toLatinDigits(sc.value) || "0", 10);
       if (isNaN(m) || isNaN(x) || x > 59 || m > 600) { note.style.color = "var(--warn)"; note.textContent = "اكتب الدقيقة والثانية كما تظهر في شريط المقطع، مثل ٢٣ : ٤٠"; return; }
       const t = m * 60 + x; saveBtn.disabled = true;
@@ -517,7 +530,7 @@
       saveBtn.disabled = false;
     } },
       h("span", { class: "small muted" }, "وصلت في المقطع إلى"),
-      h("div", { class: "tm-row", dir: "ltr" }, mm, h("span", null, ":"), sc),
+      h("div", { class: "tm-wrap" }, h("div", { class: "tm-row", dir: "ltr" }, mm, h("span", null, ":"), sc), tip),
       saveBtn);
     return h("div", { class: "bmark" },
       h("div", { class: "bm-saved" },

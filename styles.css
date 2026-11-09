@@ -710,3 +710,16 @@ sup.ex { font-size: .68em; vertical-align: .6em; line-height: 0; margin-inline-s
 .cert-prev { border: 1px solid #e5e5e5; border-radius: 12px; overflow: hidden; background: #fff; }
 .cert-prev svg { width: 100%; height: auto; display: block; }
 .wa-queue { background: #f2fbf5; border: 1.5px solid #9fd7b1; border-radius: 14px; padding: 14px; margin-top: 12px; }
+
+/* بالون إرشادي لخانتي الدقيقة والثانية */
+.tm-wrap { position: relative; display: inline-flex; }
+.bm-tip { position: absolute; top: calc(100% + 12px); inset-inline-end: -8px; z-index: 30; width: min(290px, 80vw); background: #1f6f5c; color: #fff;
+  border-radius: 14px; padding: 12px 14px 12px 32px; box-shadow: 0 10px 26px rgba(0,0,0,.22); display: grid; gap: 4px; font-size: .92rem; line-height: 1.6;
+  text-align: start; animation: tipIn .25s ease-out; }
+.bm-tip[hidden] { display: none; }
+.bm-tip::before { content: ""; position: absolute; top: -9px; inset-inline-end: 34px; border: 9px solid transparent; border-top: 0; border-bottom-color: #1f6f5c; }
+.bm-tip strong { font-size: 1rem; }
+.bm-tip-x { position: absolute; top: 6px; left: 8px; background: none; border: 0; color: #fff; font-size: 1.3rem; line-height: 1; cursor: pointer; padding: 2px 6px; opacity: .85; }
+.tm-row .tm.tm-hl { border-color: #e2b04a; box-shadow: 0 0 0 3px rgba(226,176,74,.45); animation: pnPulse 1.2s ease-in-out 3; }
+@keyframes tipIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+@media (max-width: 640px) { .tm-wrap { display: flex; flex-direction: column; align-items: flex-start; width: 100%; } .bm-tip { position: relative; top: auto; inset: auto; margin-top: 12px; width: 100%; box-sizing: border-box; } .bm-tip::before { inset-inline-end: auto; inset-inline-start: 34px; } }
