@@ -403,10 +403,6 @@
   document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden" && S.play) savePlay(false); });
   window.addEventListener("pagehide", () => { if (S.play) savePlay(false); });
 
-  // تشغيل ملف Drive نفسه داخل مشغّل الفيديو (بدل نافذة المعاينة) ليُقرأ الوقت بالثانية ويُعرف انتهاء المقطع.
-  // إن تعذّر (حصة التنزيل في Drive أو المتصفح) يعود تلقائيًا إلى نافذة معاينة Drive.
-  const ddUrl = id => `https://drive.usercontent.google.com/download?id=${encodeURIComponent(id)}&export=download&confirm=t`;
-  const driveDirect = (lid, pi, part) => !!(part && part.drive_id && !part.youtube_id && (S.pub || {}).drive_direct !== false && !(S.vfail || {})[`${lid}:${pi}`]);
   function player(l, part) {
     if (!part || !(part.youtube_id || part.url || part.drive_id)) {
       return h("div", { class: "video poster" }, h("div", { class: "poster-inner" },
@@ -419,7 +415,6 @@
     if (part.youtube_id) return h("div", { class: "video" }, h("iframe", { id: "yt-frame", src: `https://www.youtube-nocookie.com/embed/${encodeURIComponent(part.youtube_id)}?rel=0&modestbranding=1&playsinline=1&enablejsapi=1&origin=${encodeURIComponent(location.origin)}${bm ? "&start=" + bm : ""}`,
       allow: "autoplay; fullscreen; encrypted-media; picture-in-picture", allowfullscreen: true, title: `${l.title} — ${part.label}`, "data-k": S.vkey || 0 }));
     if (part.url && !(part.drive_id && (driveMode() || (S.vfail || {})[`${l.id}:${S.part}`]))) return h("div", { class: "video" }, h("video", { id: "vid", src: part.url, controls: true, playsinline: true, "webkit-playsinline": true, preload: "metadata", controlslist: "nodownload", oncontextmenu: e => e.preventDefault() }));
-    if (driveDirect(l.id, S.part, part)) return h("div", { class: "video" }, h("video", { id: "vid", src: ddUrl(part.drive_id), crossorigin: "anonymous", "data-dd": "1", controls: true, playsinline: true, "webkit-playsinline": true, preload: "metadata", controlslist: "nodownload", oncontextmenu: e => e.preventDefault() }));
     return h("div", { class: "video" },
       h("iframe", { src: `https://drive.google.com/file/d/${encodeURIComponent(part.drive_id)}/preview${bm ? "?t=" + bm + "s" : ""}`, allow: "autoplay; fullscreen; encrypted-media", allowfullscreen: true, title: `${l.title} — ${part.label}`, referrerpolicy: "strict-origin-when-cross-origin", "data-k": S.vkey || 0 }),
       h("div", { class: "drive-shield", "aria-hidden": "true" }));
@@ -439,9 +434,9 @@
     const today = st.today || new Date().toISOString().slice(0, 10);
     return !!(st.drive_until && today < st.drive_until);
   }
-  function videoFallback(lid, part, viaDrive) {
+  function videoFallback(lid, part) {
     (S.vfail ||= {})[`${lid}:${part}`] = true;
-    if (S.nid && !viaDrive) API.videoFailed(S.nid).then(on => { if (on) API.publicSettings().then(p => { S.pub = p; }).catch(() => {}); }).catch(() => {});
+    if (S.nid) API.videoFailed(S.nid).then(on => { if (on) API.publicSettings().then(p => { S.pub = p; }).catch(() => {}); }).catch(() => {});
     const l = lecture(lid), pt = l && (l.parts || [])[part];
     const el = document.getElementById("theater");
     if (el && pt && pt.drive_id && S.view === "lecture" && S.lid === lid) el.replaceChildren(player(l, pt));
@@ -455,11 +450,9 @@
     let lastSave = 0, loaded = false;
     const pt = (l0 && l0.parts || [])[part] || {};
     if (pt.drive_id) {
-      const viaDrive = v.dataset.dd === "1";
-      const fb = () => { videoFallback(lid, part, viaDrive); if (viaDrive) { const b = document.querySelector(".bmark"); if (b && S.view === "lecture" && S.lid === lid) b.replaceWith(playerBar(lecture(lid))); } };
-      v.addEventListener("error", fb, { once: true });
+      v.addEventListener("error", () => videoFallback(lid, part), { once: true });
       v.addEventListener("loadeddata", () => { loaded = true; }, { once: true });
-      setTimeout(() => { if (!loaded && v.isConnected && (v.networkState === 3 || (viaDrive && v.readyState === 0))) fb(); }, viaDrive ? 20000 : 15000);
+      setTimeout(() => { if (!loaded && v.isConnected && v.networkState === 3) videoFallback(lid, part); }, 15000);
     }
     const save = t => { if (!S.nid) return; setLocalPos(lid, part, t); API.savePosition(S.nid, lid, part, t, Math.floor(v.duration || 0) || null).catch(() => {}); };
     v.addEventListener("loadedmetadata", () => { if (start && start < (v.duration || 1e9) - 3) { try { v.currentTime = start; } catch {} } }, { once: true });
@@ -488,7 +481,7 @@
   function playerBar(l) {
     const saved = posOf(l);
     const part0 = (l.parts || [])[S.part] || (l.parts || [])[0] || {};
-    let auto = !!(part0.youtube_id || (part0.url && !(part0.drive_id && driveMode())) || driveDirect(l.id, S.part, part0));
+    let auto = !!(part0.youtube_id || part0.url);
     const mm = h("input", { type: "text", inputmode: "numeric", maxlength: "3", placeholder: "د", "aria-label": "الدقيقة", class: "tm" });
     const sc = h("input", { type: "text", inputmode: "numeric", maxlength: "2", placeholder: "ث", "aria-label": "الثانية", class: "tm" });
     if (saved) { mm.value = String(Math.floor(saved / 60)); sc.value = String(saved % 60).padStart(2, "0"); }

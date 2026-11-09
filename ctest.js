@@ -6,7 +6,7 @@
   const LETTERS = ["أ", "ب", "ج", "د"];
   const SUPS = "⁰¹²³⁴⁵⁶⁷⁸⁹";
   // ---------- تحويل رموز الأسئلة (الجذور والكسور والأسس) إلى HTML ----------
-  function supHtml(s) { return esc(s).replace(/[⁰¹²³⁴⁵⁶⁷⁸⁹]+/g, m => `<sup class="ex">${[...m].map(c => "٠١٢٣٤٥٦٧٨٩"[SUPS.indexOf(c)]).join("")}</sup>`); }
+  function supHtml(s) { return esc(s).replace(/⁻?[⁰¹²³⁴⁵⁶⁷⁸⁹]+/g, m => `<sup class="ex">${[...m].map(c => c === "⁻" ? "−" : "٠١٢٣٤٥٦٧٨٩"[SUPS.indexOf(c)]).join("")}</sup>`); }
   // الكسور ⟦بسط/مقام⟧ والجذور ⁿ√{…} مع دعم التداخل بينهما
   function mathTok(s) {
     s = String(s ?? ""); const out = []; let buf = "", i = 0;
