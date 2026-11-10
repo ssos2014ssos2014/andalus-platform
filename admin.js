@@ -1,6 +1,22 @@
 (function () {
   const app = document.getElementById("app");
   const sb = API.sb;
+  // ---------- حماية فصل المدرستين: قبل أي كتابة نتأكد أن الحساب يعمل على مدرسة هذه الصفحة ----------
+  let schoolOkAt = 0;
+  async function ensureSchool() {
+    if (!A.canSwitch || Date.now() - schoolOkAt < 4000) return;
+    const { data: i } = await sb.rpc("admin_info");
+    if (!i || i.school !== SCHOOL.key) {
+      await sb.rpc("admin_switch_school", { p_school: SCHOOL.key });
+      const { data: j } = await sb.rpc("admin_info");
+      if (!j || j.school !== SCHOOL.key) throw new Error("تعذر تثبيت المنصة الحالية، أعد تحميل الصفحة قبل الحفظ.");
+    }
+    schoolOkAt = Date.now();
+  }
+  { const _from = sb.from.bind(sb), _rpc = sb.rpc.bind(sb);
+    const guard = b => { const t = b.then.bind(b); b.then = (ok, no) => ensureSchool().then(() => t(ok, no), e => (no ? no(e) : Promise.reject(e))); return b; };
+    sb.from = tbl => { const q = _from(tbl); for (const m of ["insert", "upsert", "update", "delete"]) { const f = q[m].bind(q); q[m] = (...a) => guard(f(...a)); } return q; };
+    sb.rpc = (fn, ...a) => /^admin_(info|switch_school)$/.test(fn) ? _rpc(fn, ...a) : guard(_rpc(fn, ...a)); }
   const LETTERS = ["أ", "ب", "ج", "د", "هـ", "و"];
   const A = { tab: "dashboard", msg: null, lectures: [], qLecture: 1, editQ: null, importPreview: null, qPreview: null, pdfStudents: null };
   const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now() + "-" + Math.random().toString(16).slice(2));
@@ -347,6 +363,7 @@
         A.importPreview && importPreview(),
         A.pdfStudents && pdfStudentsPreview()),
       manualStudentPanel(),
+      moveStudentsPanel(),
       studentFilesPanel(),
       h("section", { class: "panel" },
         h("div", { class: "row", style: "justify-content:space-between" }, h("h2", { style: "margin:0" }, `الطلاب المسجلون (${count ?? 0})`)),
@@ -362,7 +379,7 @@
       if (!/^\d{1,20}$/.test(nid) || !name) { bad.push(r); continue; }
       let ph = P.phoneCol >= 0 ? toLatinDigits(r[P.phoneCol]).replace(/\.0+$/, "") : "";
       if (/^5\d{8}$/.test(ph)) ph = "0" + ph; if (/^9665\d{8}$/.test(ph)) ph = "0" + ph.slice(3);
-      const rec = { national_id: nid, full_name: name, school: A.school || SCHOOL.key,
+      const rec = { national_id: nid, full_name: name, school: SCHOOL.key,
         details: P.headers.map((k, i) => ({ k: k || `عمود ${i + 1}`, v: cell(r[i]) })).filter((d, i) => i !== P.idCol && i !== P.nameCol && i !== P.phoneCol && d.v !== "") };
       if (/^05\d{8}$/.test(ph)) rec.phone = ph;
       recs.push(rec);
@@ -391,7 +408,7 @@
 
   function pdfStudentsPreview() {
     const P = A.pdfStudents;
-    const recs = P.list.map(r => ({ national_id: r.national_id, full_name: PDFTools.fixName(r.full_name, P.revW, P.revC) }));
+    const recs = P.list.map(r => ({ national_id: r.national_id, full_name: PDFTools.fixName(r.full_name, P.revW, P.revC), school: SCHOOL.key }));
     const box = (key, label) => h("label", { class: "row small", style: "gap:6px" },
       h("input", { type: "checkbox", checked: P[key], onchange: e => { P[key] = e.target.checked; render(); } }), label);
     return h("div", { style: "margin-top:16px" },
@@ -427,9 +444,9 @@
       btn.disabled = true;
       const { data: ex, error: e1 } = await sb.from("students").select("national_id, full_name, school").eq("national_id", n).maybeSingle();
       if (e1) { btn.disabled = false; return flash("err", e1.message); }
-      if (ex && ex.school && ex.school !== (A.school || SCHOOL.key)) { btn.disabled = false; return flash("err", "رقم الهوية هذا مسجل في منصة مدرسة أخرى."); }
+      if (ex && ex.school && ex.school !== (SCHOOL.key)) { btn.disabled = false; return flash("err", "رقم الهوية هذا مسجل في منصة مدرسة أخرى."); }
       if (ex && !confirm(`رقم الهوية ${n} مسجل باسم «${ex.full_name}». هل تريد تحديث بياناته بما كتبت؟`)) { btn.disabled = false; return; }
-      const rec = { national_id: n, full_name: nm, school: A.school || SCHOOL.key };
+      const rec = { national_id: n, full_name: nm, school: SCHOOL.key };
       if (ph) rec.phone = ph;
       if (cls.value.trim()) rec.details = [{ k: "الصف / الفصل", v: cls.value.trim() }];
       const { error } = ex ? await sb.from("students").update(rec).eq("national_id", n) : await sb.from("students").insert(rec);
@@ -444,6 +461,48 @@
       h("div", { class: "grid2" }, h("label", { class: "field" }, h("span", null, "الاسم"), name), h("label", { class: "field" }, h("span", null, "رقم الهوية"), nid),
         h("label", { class: "field" }, h("span", null, "الجوال"), phone), h("label", { class: "field" }, h("span", null, "الصف / الفصل"), cls)),
       h("div", { class: "row" }, btn));
+  }
+
+  // ---------- نقل طلاب أُضيفوا خطأً إلى المنصة الأخرى ----------
+  const FEM_NAMES = new Set("مريم رهف شهد جود ريم لمى غدير أثير رغد نوف دانة هيا لين رزان وعد جنى ليان ملاك سارة سارا هند عبير أمل منى نجود روان ريماس تهاني أفنان بشاير بيان تسنيم جواهر حلا حنين خلود دلال ديما رؤى رنا رنيم ريناد زينب سلمى سما سمر شوق صبا ضحى عائشة عزة غادة غلا فجر لجين لولوة مها ميار نادية نجلاء ندى نهى هبة هديل وجدان وئام يارا أريج إيمان آلاء الاء أسيل ألين أبرار أماني بسمة تالا جمانة حصة حور دعاء رحاب رهام رتاج رند ريتاج سديم سجى سهى شذى شيماء عهود فرح لانا لمار مرام مشاعل منار نورة نوره نوال هالة وفاء يسرا ود جوري العنود الجوهرة الهنوف البندري ابتهال أروى اروى بتول تغريد جميلة حياة خديجة رقية رحمة سعاد سلوى صفية عفاف فاطمة فاطمه لطيفة ليلى مزنة منيرة موضي نجلا نوف هيفاء وسن ياسمين أسماء اسماء شيخة صالحة مضاوي حصه نوير عيده ساره".split(" "));
+  const MALE_A = /^(حمزة|حمزه|أسامة|اسامة|اسامه|عبيدة|عبيده|طلحة|عكرمة|معاوية|حذيفة|حذيفه|قتادة|عطية|خليفة|عروة|عبادة|جبلة|ثامرة|مسلمة|ربيعة|شيبة|عتبة|حارثة|سلامة|سلامه|عقبة|حنظلة)$/;
+  const looksFemale = name => { const f = String(name || "").trim().split(/\s+/)[0] || ""; if (MALE_A.test(f)) return false; return FEM_NAMES.has(f) || /(ة|ه|اء|ى)$/.test(f) && !/^(عبدالله|عبد|طه|وجيه|نبيه|فقيه|بديه)$/.test(f); };
+  function moveStudentsPanel() {
+    const other = SCHOOL.key === "andalus" ? "asma" : "andalus", otherName = SCHOOLS_INFO[other].short;
+    const box = h("div"), sel = new Set();
+    const render2 = (rows, auto) => {
+      const cnt = h("span", null, String(sel.size));
+      box.replaceChildren(rows.length ? h("div", null,
+        h("p", { class: "small" }, auto ? `وجدت ${rows.length} اسمًا يغلب أنها لطالبات (حسب الاسم الأول). راجع القائمة وأزل علامة من ليس منهن، ثم اضغط النقل.` : `نتائج البحث: ${rows.length}`),
+        h("div", { class: "table-wrap", style: "max-height:340px;overflow:auto" }, h("table", null,
+          h("thead", null, h("tr", null, h("th", null, h("input", { type: "checkbox", checked: rows.every(r => sel.has(r.national_id)), onchange: e => { rows.forEach(r => e.target.checked ? sel.add(r.national_id) : sel.delete(r.national_id)); render2(rows, auto); } })), h("th", null, "الاسم"), h("th", null, "رقم الهوية"), h("th", null, "بيانات"))),
+          h("tbody", null, rows.map(r => h("tr", null, h("td", null, h("input", { type: "checkbox", checked: sel.has(r.national_id), onchange: e => { e.target.checked ? sel.add(r.national_id) : sel.delete(r.national_id); cnt.textContent = sel.size; } })),
+            h("td", null, r.full_name), h("td", null, r.national_id), h("td", { class: "small" }, (r.details || []).map(d => `${d.k}: ${d.v}`).join("، ").slice(0, 80))))))),
+        h("div", { class: "row", style: "margin-top:10px" }, h("button", { class: "btn danger", onclick: async () => {
+          if (!sel.size) return flash("err", "لم تحدد أحدًا.");
+          if (!confirm(`نقل ${sel.size} إلى منصة ${otherName} مع نتائجهم ومشاهداتهم وشهاداتهم؟ لن يظهروا بعدها في هذه المنصة.`)) return;
+          const { data, error } = await sb.rpc("admin_move_students", { p_ids: [...sel], p_to: other });
+          if (error) return flash("err", /admin_move_students|schema cache/.test(error.message) ? "شغّل ملف update-v23.sql في Supabase أولًا." : error.message);
+          flash("ok", `تم نقل ${data} إلى منصة ${otherName}.`); sel.clear(); render();
+        } }, "نقل المحددين (", cnt, `) إلى منصة ${otherName}`)))
+        : h("p", { class: "small muted" }, auto ? "لم أجد أسماء يغلب أنها لطالبات في هذه المنصة." : "لا نتائج."));
+    };
+    const q = h("input", { type: "text", placeholder: "ابحث بالاسم أو رقم الهوية لإضافة آخرين" });
+    const scan = async () => {
+      const all = []; for (let from = 0; ; from += 1000) { const { data, error } = await sb.from("students").select("national_id, full_name, details").eq("school", SCHOOL.key).eq("is_test", false).range(from, from + 999); if (error) return flash("err", error.message); all.push(...data); if (data.length < 1000) break; }
+      const rows = all.filter(r => looksFemale(r.full_name) || /أسماء|بنات|للبنات|محايل/.test(JSON.stringify(r.details || [])));
+      rows.forEach(r => sel.add(r.national_id)); render2(rows, true);
+    };
+    const find = async () => {
+      const t = q.value.trim(); if (!t) return;
+      const { data, error } = await sb.from("students").select("national_id, full_name, details").eq("school", SCHOOL.key).eq("is_test", false).or(`full_name.ilike.%${t.replace(/[%,()]/g, "")}%,national_id.ilike.%${toLatinDigits(t).replace(/[%,()]/g, "")}%`).limit(50);
+      if (error) return flash("err", error.message); render2(data, false);
+    };
+    return h("details", { class: "panel" },
+      h("summary", { style: "cursor:pointer;font-weight:700" }, SCHOOL.key === "andalus" ? "🔀 إرجاع طالبات أُضفن خطأً إلى منصة أسماء" : "🔀 نقل طلاب أُضيفوا خطأً إلى منصة الأندلس"),
+      h("p", { class: "small muted" }, `استخدمها لتصحيح الأخطاء فقط: تنقل الطالب مع كل نتائجه ومشاهداته وشهاداته إلى منصة ${otherName}. بعد تشغيل update-v23.sql لم يعد ممكنًا أن يُضاف أحد لغير منصته.`),
+      h("div", { class: "row", style: "gap:8px;flex-wrap:wrap" }, SCHOOL.key === "andalus" && h("button", { class: "btn", onclick: scan }, "🔎 اكتشف أسماء الطالبات تلقائيًا"), h("div", { style: "flex:1 1 220px" }, q), h("button", { class: "btn ghost", onclick: find }, "بحث")),
+      box);
   }
 
   function studentFilesPanel() {
@@ -912,7 +971,7 @@
             ev.target.disabled = true; ev.target.textContent = "جارٍ توليد الأسئلة…"; await new Promise(r => setTimeout(r, 30));
             try {
               const sections = CTEST.generate({ level: T.level, lectures: lecs.filter(l => T.sel.has(l.id)), quant: T.q, verbal: T.v, seed: (Date.now() ^ (Math.random() * 1e9)) >>> 0 });
-              const rec = { code: newCode(), title: T.title.trim(), school: A.school || SCHOOL.key, delivery: T.delivery, level: T.level, config: { quant: T.q, verbal: T.v, lectures: [...T.sel] }, sections };
+              const rec = { code: newCode(), title: T.title.trim(), school: SCHOOL.key, delivery: T.delivery, level: T.level, config: { quant: T.q, verbal: T.v, lectures: [...T.sel] }, sections };
               const { data, error } = await sb.from("custom_exams").insert(rec).select("id").single(); if (error) throw error;
               T.note = { type: "ok", text: `✓ أُنشئ الاختبار «${rec.title}» برمز ${rec.code}، وفيه ${AR(sections.reduce((t, s) => t + s.questions.length, 0))} سؤالًا.` };
               T.open = data.id; A.msg = null; render();
