@@ -60,22 +60,57 @@
   }
   function logout() { ss.set("andalus-nid", null); ss.set("andalus-sid", null); clearInterval(pingTimer); Object.assign(S, { nid: null, data: null, quiz: null, result: null, certs: null, certsFor: null }); go("login"); }
 
+  // ---------- الطالب المستقل: تغيير رقم الهوية المؤقت مرة واحدة عند أول دخول ----------
+  async function afterLogin(nid) {
+    const st = await API.idStatus(nid);
+    if (st && st.independent && !st.locked) { S.newId = { cur: nid }; return go("newid"); }
+    go(S.data.student.phone || nid === TEST_ID ? "home" : "phone");
+  }
+  function viewNewId() {
+    const cur = S.newId ? S.newId.cur : S.nid;
+    const input = h("input", { type: "text", class: "id-input", inputmode: "numeric", autocomplete: "off", maxlength: "20", placeholder: "رقم الهوية الجديد", "aria-label": "رقم الهوية الجديد" });
+    const note = h("div", { role: "alert" });
+    const done = async nw => {
+      ss.set("andalus-nid", nw); S.nid = nw; S.newId = null;
+      try { const sid = await API.login(nw); if (sid) ss.set("andalus-sid", sid); } catch {}
+      try { S.data = await API.portal(nw) || S.data; } catch {}
+      startPing(); go(S.data.student.phone ? "home" : "phone");
+    };
+    const save = async keep => {
+      const v = keep ? cur : toLatinDigits(input.value);
+      if (!keep && !/^\d{1,20}$/.test(v)) { note.className = "alert err"; note.textContent = "اكتب رقم الهوية بالأرقام فقط."; return; }
+      if (!keep && !confirm(`سيصبح رقم دخولك ${v} ولن تستطيع تغييره بعد ذلك. هل أنت متأكد؟`)) return;
+      try { const nw = await API.changeId(cur, v); await done(nw || v); }
+      catch (e) { note.className = "alert err"; note.textContent = e.message; }
+    };
+    setTimeout(() => input.focus(), 0);
+    return [band(), h("main", { class: "wrap narrow" }, h("div", { class: "panel login-card", style: "margin-top:40px" },
+      h("h1", { style: "margin-top:0;font-size:1.4rem" }, "🪪 اعتماد رقم الدخول"),
+      h("p", null, "رقم دخولك المؤقت هو ", h("strong", { style: "font-size:1.2rem;letter-spacing:2px" }, AR(cur)), "."),
+      h("p", { class: "small muted" }, "يمكنك الآن ولمرة واحدة فقط تغييره إلى أي رقم تريده (أرقام فقط، وبأي عدد من الأرقام)، أو الإبقاء عليه. الرقم الذي تعتمده هو رقم دخولك إلى المنصة دائمًا، فاحفظه."),
+      note,
+      h("form", { onsubmit: e => { e.preventDefault(); save(false); } },
+        h("label", { class: "field" }, h("span", null, "رقم الهوية الجديد"), input),
+        h("button", { class: "btn", type: "submit", style: "width:100%" }, "اعتماد الرقم الجديد")),
+      h("button", { class: "btn ghost", type: "button", style: "width:100%;margin-top:10px", onclick: () => save(true) }, `الإبقاء على الرقم ${AR(cur)}`)))];
+  }
+
   // ---------- الدخول ----------
   function viewLogin() {
     const st = settings();
-    const input = h("input", { type: "text", class: "id-input", inputmode: "numeric", autocomplete: "off", maxlength: "14",
+    const input = h("input", { type: "text", class: "id-input", inputmode: "numeric", autocomplete: "off", maxlength: "20",
       placeholder: "رقم الهوية", "aria-label": "رقم الهوية", required: true });
     const btn = h("button", { class: "btn", type: "submit", style: "width:100%" }, "دخول");
     const form = h("form", { onsubmit: async e => {
       e.preventDefault();
       const nid = toLatinDigits(input.value);
-      if (!/^\d{5,14}$/.test(nid) && nid !== TEST_ID) { S.error = "اكتب رقم الهوية بالأرقام فقط."; return render(); }
+      if (!/^\d{1,20}$/.test(nid)) { S.error = "اكتب رقم الهوية بالأرقام فقط."; return render(); }
       btn.disabled = true; btn.textContent = "جارٍ التحقق…";
       try {
         const data = await API.portal(nid);
         if (!data) { S.error = `رقم الهوية غير مسجل في منصة ${SCHOOL.short}. تأكد من الرقم أو راجع معلمك.`; return render(); }
         try { const sid = await API.login(nid); if (sid) ss.set("andalus-sid", sid); await refresh0(nid, data); } catch { Object.assign(S, { nid, data }); }
-        ss.set("andalus-nid", nid); startPing(); go(S.data.student.phone || nid === TEST_ID ? "home" : "phone");
+        ss.set("andalus-nid", nid); startPing(); afterLogin(nid);
       } catch (err) { S.error = err.message; render(); }
     } },
       S.error && h("div", { class: "alert err", role: "alert" }, S.error),
@@ -937,7 +972,7 @@
   function fmt(ms) { const s = Math.floor(ms / 1000); return `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`; }
 
   function render() {
-    const views = { login: viewLogin, home: viewHome, certs: viewCerts, section: viewSection, phone: viewPhone, lecture: viewLecture, quiz: viewQuiz, result: viewResult, sim: viewSim, simReview: viewSimReview, simResult: viewSimResult };
+    const views = { login: viewLogin, newid: viewNewId, home: viewHome, certs: viewCerts, section: viewSection, phone: viewPhone, lecture: viewLecture, quiz: viewQuiz, result: viewResult, sim: viewSim, simReview: viewSimReview, simResult: viewSimResult };
     const nodes = (S.data || S.view === "login" ? views[S.view] : viewLogin)();
     app.replaceChildren(...[nodes].flat(3).filter(Boolean));
     if (S.play) mountPlayer();
@@ -1012,13 +1047,13 @@
     try {
       const hp = new URLSearchParams(location.hash.slice(1)), qp = new URLSearchParams(location.search);
       const direct = toLatinDigits(hp.get("nid") || qp.get("nid") || "");
-      if (direct && /^\d{4,14}$/.test(direct)) {
+      if (direct && /^\d{1,20}$/.test(direct)) {
         history.replaceState(null, "", location.pathname);
         const d = await API.portal(direct);
         if (d) {
           ss.set("andalus-nid", direct); try { const sid = await API.login(direct); if (sid) ss.set("andalus-sid", sid); } catch {}
           Object.assign(S, { nid: direct, data: await API.portal(direct) || d }); startPing();
-          return go(S.data.student.phone || direct === TEST_ID ? "home" : "phone");
+          return afterLogin(direct);
         }
         S.error = "رقم الهوية المرسل من نظام المدرسة غير مسجل في المنصة.";
       }
@@ -1039,6 +1074,7 @@
         const d = await API.portal(saved);
         if (d) {
           Object.assign(S, { nid: saved, data: d }); startPing();
+          const ids = await API.idStatus(saved); if (ids && ids.independent && !ids.locked) { S.newId = { cur: saved }; return go("newid"); }
           if (!d.student.phone && saved !== TEST_ID) return go("phone");
           let sim = null; try { sim = JSON.parse(ss.get(SIMKEY) || "null"); } catch {}
           if (sim && window.EXAMS[sim.lid]) { S.sim = sim; return go(Date.now() < sim.deadline ? "sim" : "simReview"); }

@@ -16,7 +16,10 @@ window.API = (() => {
     already_submitted: "تم تسليم هذا الاختبار مسبقًا.",
     bad_items: "تعذر حفظ الاختبار. أعد المحاولة.",
     bad_phone: "رقم الجوال غير صحيح. اكتبه بالشكل 05xxxxxxxx.",
-    attempt_not_found: "تعذر العثور على الاختبار. ابدأ اختبارًا جديدًا."
+    attempt_not_found: "تعذر العثور على الاختبار. ابدأ اختبارًا جديدًا.",
+    id_taken: "هذا الرقم مستخدم لحساب آخر. اختر رقمًا مختلفًا.",
+    bad_id: "رقم الهوية يجب أن يتكون من أرقام فقط.",
+    id_change_not_allowed: "لا يمكن تغيير رقم الهوية لهذا الحساب الآن."
   };
   const friendly = msg => {
     for (const k in ERRORS) if (String(msg).includes(k)) return ERRORS[k];
@@ -44,7 +47,10 @@ window.API = (() => {
     videoFailed: nid => rpc("video_failed", { p_nid: nid }),
     ping: (sid, nid) => rpc("student_ping", { p_session: sid, p_nid: nid }),
     setPhone: (nid, phone) => rpc("set_phone", { p_nid: nid, p_phone: phone }),
-    submitPractice: (nid, attempt, items, sec) => rpc("submit_practice", { p_attempt: attempt, p_nid: nid, p_items: items, p_duration: sec })
+    submitPractice: (nid, attempt, items, sec) => rpc("submit_practice", { p_attempt: attempt, p_nid: nid, p_items: items, p_duration: sec }),
+    // الطالب المستقل (update-v22.sql): قبل تشغيل التحديث تعود null فلا يتغير شيء
+    idStatus: nid => rpc("student_id_status", { p_nid: nid }).catch(() => null),
+    changeId: (nid, nw) => rpc("student_change_id", { p_old: nid, p_new: nw })
   };
 
   // ---------------- وضع التجربة ----------------
@@ -87,6 +93,8 @@ window.API = (() => {
   }
   const wait = () => new Promise(r => setTimeout(r, 150));
   const demoApi = {
+    async idStatus() { return null; },
+    async changeId(nid) { return nid; },
     async publicSettings() { return SETTINGS; },
     async videoFailed() { return false; },
     async savePosition(nid, lid, part, pos, dur) { const st = load(); ((st.pos ||= {})[nid + ":" + lid] ||= {})[part] = pos; if (dur) ((st.dur ||= {})[nid + ":" + lid] ||= {})[part] = dur; save(st); return true; },

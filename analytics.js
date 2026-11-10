@@ -230,9 +230,9 @@
     if (cache[id]) return cache[id];
     const [e, r] = await Promise.all([
       X.sb.from("custom_exams").select("id, code, title, delivery, level, sections, created_at").eq("id", id).single(),
-      X.sb.from("custom_results").select("national_id, answers, score, total, percent, source, submitted_at, students(full_name, phone, school)").eq("exam_id", id)]);
+      X.sb.from("custom_results").select("national_id, answers, score, total, percent, source, submitted_at, students(full_name, phone, school, is_test)").eq("exam_id", id)]);
     if (e.error) throw e.error; if (r.error) throw r.error;
-    const results = r.data.filter(x => x.national_id !== X.TEST_ID).map(x => ({ ...x, name: x.students?.full_name || x.national_id, an: CTEST.analyze(e.data.sections, x.answers) }));
+    const results = r.data.filter(x => x.national_id !== X.TEST_ID && !(x.students && x.students.is_test)).map(x => ({ ...x, name: x.students?.full_name || x.national_id, an: CTEST.analyze(e.data.sections, x.answers) }));
     return cache[id] = { exam: e.data, results };
   }
   async function custom(ctx) {

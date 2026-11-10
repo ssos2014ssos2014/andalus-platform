@@ -176,7 +176,7 @@
         list("الأكثر محاولات للاختبارات", D.top_tests, r => `${AR(r.tests)} اختبار`),
         list("الأعلى درجات", D.top_scores, r => `${AR(r.avg)}٪`, "حسب متوسط درجات الاختبارات"),
         list("الأدنى درجات", D.low_scores, r => `${AR(r.avg)}٪`, "يحتاجون متابعة، راسلهم من زر واتساب")),
-      await testPanel(D.test || {})];
+      await testPanel(D.test || {}), await independentsPanel()];
   }
   async function testPanel(T) {
     const { data: rows } = await sb.from("attempts").select("id, submitted_at, lecture_id, score, total, percent, passed")
@@ -205,13 +205,86 @@
         : h("p", { class: "small muted", style: "margin:0" }, "لا توجد محاولات للحساب التجريبي بعد."));
   }
 
+  // ---------- الطلاب المستقلون (لهم خصائص الحساب التجريبي: لا يدخلون في إحصاءات طلاب المدرسة) ----------
+  async function independentsPanel() {
+    const box = h("section", { class: "panel test-panel", style: "margin-top:18px" });
+    const site = new URL(SCHOOL.home || "index.html", location.href).href;
+    const msg = (name, nid, temp) => `السلام عليكم ${name}،\nتم إنشاء حسابك في منصة التأسيس والتدريب لاختبار القدرات العامة (${SCHOOL.name}).\nرابط المنصة: ${site}\nرقم الدخول: ${nid}\n${temp ? "عند أول دخول يمكنك تغيير رقم الدخول مرة واحدة إلى أي رقم تريده، أو الإبقاء عليه.\n" : ""}`;
+    const { data, error } = await sb.rpc("admin_independents");
+    const nameIn = h("input", { type: "text", placeholder: SCHOOL.female ? "اسم الطالبة" : "اسم الطالب" });
+    const phoneIn = h("input", { type: "text", inputmode: "numeric", placeholder: "رقم الجوال 05xxxxxxxx (اختياري)" });
+    const add = h("button", { class: "btn", onclick: async () => {
+      const name = nameIn.value.trim(), ph = toLatinDigits(phoneIn.value);
+      if (!name) return flash("err", "اكتب الاسم أولًا.");
+      if (ph && !/^05\d{8}$/.test(ph)) return flash("err", "رقم الجوال يجب أن يكون 10 أرقام ويبدأ بـ 05.");
+      add.disabled = true;
+      const r = await sb.rpc("admin_add_independent", { p_name: name, p_phone: ph || null }); add.disabled = false;
+      if (r.error) return flash("err", /admin_add_independent|schema cache/.test(r.error.message) ? "شغّل ملف update-v22.sql في Supabase أولًا." : r.error.message);
+      flash("ok", `تمت الإضافة. رقم الدخول المؤقت: ${AR(r.data)}`);
+      if (ph && confirm(`تمت إضافة ${name} برقم الدخول ${r.data}. هل تريد إرسال بيانات الدخول له على واتساب؟`)) window.open(`https://wa.me/966${ph.slice(1)}?text=${encodeURIComponent(msg(name, r.data, true))}`, "_blank");
+      render();
+    } }, "➕ إضافة وتوليد رقم دخول");
+    const rows = data || [];
+    box.append(
+      h("div", null, h("h2", { style: "margin:0" }, SCHOOL.female ? "🧑‍🎓 الطالبات المستقلات" : "🧑‍🎓 الطلاب المستقلون"),
+        h("p", { class: "small muted", style: "margin:4px 0 0" }, "حسابات من خارج كشف المدرسة لها خصائص الحساب التجريبي: نتائجها هنا فقط، ولا تدخل في إحصاءات الطلاب ولا في تبويب النتائج والتحليل ولا في الشهادات. يُولَّد لكل حساب رقم دخول من ٦ أرقام، ويستطيع صاحبه عند أول دخول تغييره مرة واحدة إلى أي رقم (بأي عدد من الأرقام) أو الإبقاء عليه.")),
+      h("div", { class: "row", style: "gap:8px;flex-wrap:wrap;margin:12px 0" }, h("div", { style: "flex:2 1 220px" }, nameIn), h("div", { style: "flex:1 1 200px" }, phoneIn), add),
+      error ? h("div", { class: "alert warn" }, "لتفعيل هذه الميزة شغّل ملف update-v22.sql مرة واحدة في Supabase ← SQL Editor، ثم حدّث الصفحة.")
+        : rows.length ? h("div", { class: "table-wrap" }, h("table", null,
+          h("thead", null, h("tr", null, ["الاسم", "رقم الدخول", "الجوال", "الدخول", "آخر ظهور", "المشاهدات", "الاختبارات", "المتوسط", ""].map(x => h("th", null, x)))),
+          h("tbody", null, rows.map(r => h("tr", null,
+            h("td", null, r.full_name),
+            h("td", { style: "white-space:nowrap" }, h("strong", { style: "letter-spacing:1px" }, AR(r.national_id)), h("br"),
+              h("span", { class: "small", style: `color:${r.id_locked ? "var(--ok)" : "var(--saffron)"}` }, r.id_locked ? "✓ معتمد" : "⏳ مؤقت — يغيّره عند أول دخول")),
+            h("td", { class: "small", style: "white-space:nowrap" }, h("div", { class: "row", style: "gap:6px;flex-wrap:nowrap" }, wa(r.phone, r.full_name, msg(r.full_name, r.national_id, !r.id_locked)), r.phone || "—")),
+            h("td", null, AR(r.logins || 0)), h("td", { class: "small" }, r.last_seen ? new Date(r.last_seen).toLocaleDateString("ar-SA") : "—"),
+            h("td", null, AR(r.watched || 0)), h("td", null, `${AR(r.tests || 0)}${r.tests ? ` (اجتاز ${AR(r.passed || 0)})` : ""}`), h("td", null, r.avg_pct == null ? "—" : AR(r.avg_pct) + "٪"),
+            h("td", { style: "white-space:nowrap" }, h("div", { class: "row", style: "gap:6px;flex-wrap:nowrap" },
+              h("button", { class: "btn sm", onclick: () => indepAttempts(r) }, "النتائج"),
+              h("button", { class: "btn ghost sm", onclick: async () => {
+                const v = prompt(`رقم الدخول الجديد لـ ${r.full_name} (أرقام فقط بأي عدد):`, r.national_id); if (v == null) return;
+                const nv = toLatinDigits(v); if (!/^\d{1,20}$/.test(nv)) return flash("err", "رقم الدخول يجب أن يكون أرقامًا فقط.");
+                const { error } = await sb.rpc("admin_set_independent_id", { p_old: r.national_id, p_new: nv, p_unlock: false });
+                if (error) return flash("err", /id_taken/.test(error.message) ? "هذا الرقم مستخدم لحساب آخر." : error.message);
+                flash("ok", `أصبح رقم الدخول ${AR(nv)}.`); render();
+              } }, "تغيير الرقم"),
+              r.id_locked && h("button", { class: "btn ghost sm", title: "يسمح له بتغيير رقمه مرة أخرى عند دخوله القادم", onclick: async () => {
+                const { error } = await sb.rpc("admin_set_independent_id", { p_old: r.national_id, p_new: r.national_id, p_unlock: true });
+                error ? flash("err", error.message) : (flash("ok", "سيُطلب منه اعتماد رقمه عند دخوله القادم."), render());
+              } }, "السماح بالتغيير"),
+              h("button", { class: "btn ghost sm", onclick: async () => {
+                if (!confirm(`تصفير ${r.full_name}؟ تُحذف محاولاته ومشاهداته وسجل دخوله.`)) return;
+                try { await resetStudent(r.national_id, false); flash("ok", "تم التصفير."); render(); } catch (e) { flash("err", e.message); }
+              } }, "تصفير"),
+              h("button", { class: "btn danger sm", onclick: async () => {
+                if (!confirm(`حذف ${r.full_name} وكل نتائجه نهائيًا؟`)) return;
+                const { error } = await sb.from("students").delete().eq("national_id", r.national_id).eq("independent", true);
+                error ? flash("err", error.message) : (flash("ok", "تم الحذف."), render());
+              } }, "حذف"))))))))
+          : h("p", { class: "small muted", style: "margin:0" }, "لا توجد حسابات مستقلة بعد."));
+    return box;
+  }
+  async function indepAttempts(r) {
+    const { data, error } = await sb.from("attempts").select("id, submitted_at, lecture_id, score, total, percent, passed").eq("national_id", r.national_id).not("submitted_at", "is", null).order("submitted_at", { ascending: false }).limit(200);
+    if (error) return flash("err", error.message);
+    const lt = id => (A.lectures.find(l => l.id === id) || {}).title || `المحاضرة ${AR(id)}`;
+    const w = h("div", { class: "ana-modal", onclick: e => { if (e.target === w) w.remove(); } }, h("div", { class: "ana-modal-card" },
+      h("div", { class: "ana-modal-head" }, h("strong", null, `نتائج ${r.full_name} (${AR(r.national_id)})`), h("button", { class: "btn sm", onclick: () => w.remove() }, "إغلاق ✕")),
+      h("div", { class: "ana-modal-body" }, data.length ? h("div", { class: "table-wrap" }, h("table", null,
+        h("thead", null, h("tr", null, ["التاريخ", "المحاضرة", "الدرجة", "النسبة", "النتيجة"].map(x => h("th", null, x)))),
+        h("tbody", null, data.map(a => h("tr", null, h("td", { class: "small" }, new Date(a.submitted_at).toLocaleString("ar-SA")), h("td", null, lt(a.lecture_id)),
+          h("td", null, `${AR(a.score)} من ${AR(a.total)}`), h("td", null, AR(a.percent) + "٪"), h("td", { class: a.passed ? "chip-pass" : "chip-fail" }, a.passed ? "اجتاز" : "يحتاج مراجعة"))))))
+        : h("p", { class: "muted" }, "لا توجد اختبارات بعد."))));
+    document.body.append(w);
+  }
+
   // ---------- الطلاب ----------
   async function tabStudents() {
-    const { count } = await sb.from("students").select("*", { count: "exact", head: true }).eq("school", SCHOOL.key).neq("national_id", TEST_ID);
+    const { count } = await sb.from("students").select("*", { count: "exact", head: true }).eq("school", SCHOOL.key).eq("is_test", false);
     const search = h("input", { type: "text", placeholder: "ابحث بالاسم أو رقم الهوية" });
     const list = h("div");
     async function load() {
-      let q = sb.from("students").select("national_id, full_name, phone, details, student_files(id, title, url, path)").eq("school", SCHOOL.key).neq("national_id", TEST_ID).order("full_name").limit(100);
+      let q = sb.from("students").select("national_id, full_name, phone, details, student_files(id, title, url, path)").eq("school", SCHOOL.key).eq("is_test", false).order("full_name").limit(100);
       const t = search.value.trim();
       if (t) q = q.or(`full_name.ilike.%${t.replace(/[%,()]/g, "")}%,national_id.ilike.%${toLatinDigits(t).replace(/[%,()]/g, "")}%`);
       const { data, error } = await q; if (error) throw error;
