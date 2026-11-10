@@ -915,7 +915,7 @@
     finishing = false;
   }
   function ranges(sk) {
-    return [[sk.from, sk.to], ...(sk.extra || [])].map(([a, b]) => `${tfmt(a)} – ${tfmt(b)}`).join(" ، ");
+    return (sk.seg ? sk.seg + ": " : "") + [[sk.from, sk.to], ...(sk.extra || [])].map(([a, b]) => `${tfmt(a)} – ${tfmt(b)}`).join(" ، ");
   }
   function viewSimResult() {
     const R = S.result, def = window.EXAMS[R.lid], l = lecture(R.lid), next = nextOf(R.lid);

@@ -75,7 +75,7 @@
             let c = null; try { c = p.sk.gen(levelR(R0, lvl), H); } catch { c = null; }
             if (!valid(c)) continue;
             const sig = `${p.l.id}|${p.key}|${c.sig}`; if (used.has(sig)) continue; used.add(sig);
-            q = { body: c.body, options: c.options, correct: c.correct, steps: c.steps || [], explanation: c.explanation || "", skill: p.sk.title, key: p.key, lid: p.l.id, ltitle: `${sub === "quant" ? "الكمي" : "اللفظي"} — ${p.l.title}`, from: p.sk.from || 0, level: lvl };
+            q = { body: c.body, options: c.options, correct: c.correct, steps: c.steps || [], explanation: c.explanation || "", skill: p.sk.title, key: p.key, lid: p.l.id, ltitle: `${sub === "quant" ? "الكمي" : "اللفظي"} — ${p.l.title}${p.sk.seg ? ` (${p.sk.seg})` : ""}`, from: p.sk.from || 0, level: lvl };
           }
           if (q) qs.push(q);
         }

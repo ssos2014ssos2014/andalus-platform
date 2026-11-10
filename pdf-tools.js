@@ -47,7 +47,9 @@ window.PDFTools = (() => {
   function students(ls) {
     const found = {};
     for (const ln of ls) {
-      const m = lineText(ln).match(/(?<!\d)\d{10}(?!\d)/);
+      // رقم الهوية بأي طول (٥–١٥ رقمًا) ما عدا أرقام الجوال، ونختار الأطول في السطر
+      const ids = (lineText(ln).match(/(?<!\d)\d{5,15}(?!\d)/g) || []).filter(x => !/^05\d{8}$/.test(x) && !/^9665\d{8}$/.test(x)).sort((a, b) => b.length - a.length);
+      const m = ids.length ? [ids[0]] : null;
       if (!m) continue;
       // نجمع العناصر العربية المتجاورة في "خلايا"، ونختار الخلية الأطول اسمًا
       const runs = []; let cur = null, prev = null;

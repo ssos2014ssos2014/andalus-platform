@@ -13,7 +13,7 @@
   const html = s => { const e = document.createElement("span"); e.innerHTML = s; return e; };
   const lecTitle = id => { const l = (X.lectures || []).find(x => x.id === id); return l ? l.title : `المحاضرة ${X.AR(id)}`; };
   const skillDef = (lid, key) => { const d = window.EXAMS && window.EXAMS[lid]; return d && d.skills && d.skills[key]; };
-  const ranges = sk => [[sk.from, sk.to], ...(sk.extra || [])].map(([a, b]) => `${tfmt(a)} – ${tfmt(b)}`).join(" ، ");
+  const ranges = sk => (sk.seg ? sk.seg + ": " : "") + [[sk.from, sk.to], ...(sk.extra || [])].map(([a, b]) => `${tfmt(a)} – ${tfmt(b)}`).join(" ، ");
 
   // ---------- الرسوم البيانية ----------
   function hbars(rows, opt = {}) {

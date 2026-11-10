@@ -346,6 +346,7 @@
         } }),
         A.importPreview && importPreview(),
         A.pdfStudents && pdfStudentsPreview()),
+      manualStudentPanel(),
       studentFilesPanel(),
       h("section", { class: "panel" },
         h("div", { class: "row", style: "justify-content:space-between" }, h("h2", { style: "margin:0" }, `الطلاب المسجلون (${count ?? 0})`)),
@@ -358,7 +359,7 @@
     const recs = [], bad = [];
     for (const r of P.rows) {
       const nid = toLatinDigits(r[P.idCol]).replace(/\.0+$/, ""), name = cell(r[P.nameCol]);
-      if (!/^\d{5,14}$/.test(nid) || !name) { bad.push(r); continue; }
+      if (!/^\d{1,20}$/.test(nid) || !name) { bad.push(r); continue; }
       let ph = P.phoneCol >= 0 ? toLatinDigits(r[P.phoneCol]).replace(/\.0+$/, "") : "";
       if (/^5\d{8}$/.test(ph)) ph = "0" + ph; if (/^9665\d{8}$/.test(ph)) ph = "0" + ph.slice(3);
       const rec = { national_id: nid, full_name: name, school: A.school || SCHOOL.key,
@@ -411,6 +412,40 @@
         h("button", { class: "btn ghost", onclick: () => { A.pdfStudents = null; render(); } }, "إلغاء")));
   }
 
+  // ---------- إضافة طالب يدويًا (مثل الطالب المستورد تمامًا؛ والاستيراد اللاحق يحدّث بياناته دون تكرار) ----------
+  function manualStudentPanel() {
+    const fem = SCHOOL.female;
+    const name = h("input", { type: "text", placeholder: fem ? "اسم الطالبة كاملًا" : "اسم الطالب كاملًا" });
+    const nid = h("input", { type: "text", inputmode: "numeric", placeholder: "رقم الهوية أو الإقامة أو الجواز (أرقام فقط، بأي عدد)" });
+    const phone = h("input", { type: "text", inputmode: "numeric", placeholder: "رقم الجوال 05xxxxxxxx (اختياري)" });
+    const cls = h("input", { type: "text", placeholder: "الصف / الفصل (اختياري)" });
+    const btn = h("button", { class: "btn", onclick: async () => {
+      const n = toLatinDigits(nid.value).replace(/\s+/g, ""), nm = name.value.trim(), ph = toLatinDigits(phone.value).trim();
+      if (!nm) return flash("err", "اكتب الاسم.");
+      if (!/^\d{1,20}$/.test(n)) return flash("err", "رقم الهوية يجب أن يكون أرقامًا فقط.");
+      if (ph && !/^05\d{8}$/.test(ph)) return flash("err", "رقم الجوال يجب أن يكون ١٠ أرقام ويبدأ بـ 05.");
+      btn.disabled = true;
+      const { data: ex, error: e1 } = await sb.from("students").select("national_id, full_name, school").eq("national_id", n).maybeSingle();
+      if (e1) { btn.disabled = false; return flash("err", e1.message); }
+      if (ex && ex.school && ex.school !== (A.school || SCHOOL.key)) { btn.disabled = false; return flash("err", "رقم الهوية هذا مسجل في منصة مدرسة أخرى."); }
+      if (ex && !confirm(`رقم الهوية ${n} مسجل باسم «${ex.full_name}». هل تريد تحديث بياناته بما كتبت؟`)) { btn.disabled = false; return; }
+      const rec = { national_id: n, full_name: nm, school: A.school || SCHOOL.key };
+      if (ph) rec.phone = ph;
+      if (cls.value.trim()) rec.details = [{ k: "الصف / الفصل", v: cls.value.trim() }];
+      const { error } = ex ? await sb.from("students").update(rec).eq("national_id", n) : await sb.from("students").insert(rec);
+      btn.disabled = false;
+      if (error) return flash("err", error.message);
+      flash("ok", ex ? `تم تحديث بيانات ${nm}.` : `تمت إضافة ${nm} برقم الهوية ${n}. يستطيع الدخول بهذا الرقم الآن.`);
+      render();
+    } }, fem ? "➕ إضافة الطالبة" : "➕ إضافة الطالب");
+    return h("section", { class: "panel" },
+      h("h2", { style: "margin-top:0" }, fem ? "✍️ إضافة طالبة يدويًا" : "✍️ إضافة طالب يدويًا"),
+      h("p", { class: "small muted", style: "margin-top:0" }, (fem ? "تُضاف الطالبة" : "يُضاف الطالب") + " إلى طلاب المدرسة مثل المستوردين تمامًا: تظهر نتائجه في الإحصاءات والتحليل والشهادات. رقم الهوية يُقبل بأي عدد من الأرقام (للطلاب السعوديين وغير السعوديين). وإذا استوردت كشفًا لاحقًا يحتوي على رقم الهوية نفسه فتُحدَّث بياناته فقط، دون تكرار ودون حذف لنتائجه."),
+      h("div", { class: "grid2" }, h("label", { class: "field" }, h("span", null, "الاسم"), name), h("label", { class: "field" }, h("span", null, "رقم الهوية"), nid),
+        h("label", { class: "field" }, h("span", null, "الجوال"), phone), h("label", { class: "field" }, h("span", null, "الصف / الفصل"), cls)),
+      h("div", { class: "row" }, btn));
+  }
+
   function studentFilesPanel() {
     const title = h("input", { type: "text", placeholder: "عنوان الملف (اختياري)، مثل: شهادة الفصل الأول" });
     const nid = h("input", { type: "text", inputmode: "numeric", placeholder: "رقم هوية طالب واحد (اختياري)" });
@@ -426,17 +461,17 @@
           const one = toLatinDigits(nid.value);
           e.target.disabled = true;
           const { data: studs } = one ? await sb.from("students").select("national_id").eq("school", SCHOOL.key).eq("national_id", one)
-            : await sb.from("students").select("national_id").eq("school", SCHOOL.key).in("national_id", list.map(f => (toLatinDigits(f.name).match(/\d{10}/) || [""])[0]).filter(Boolean));
+            : await sb.from("students").select("national_id").eq("school", SCHOOL.key).in("national_id", list.map(f => (toLatinDigits(f.name).match(/\d{4,20}/) || [""])[0]).filter(Boolean));
           const known = new Set((studs || []).map(s => s.national_id));
           if (one && !known.has(one)) { e.target.disabled = false; return flash("err", "رقم الهوية غير مسجل في الطلاب."); }
           let done = 0; const skipped = [];
           for (const f of list) {
-            const id = one || (toLatinDigits(f.name).match(/\d{10}/) || [""])[0];
+            const id = one || (toLatinDigits(f.name).match(/\d{4,20}/) || [""])[0];
             if (!known.has(id)) { skipped.push(f.name); continue; }
             status.textContent = `جارٍ رفع ${done + 1} من ${list.length}…`;
             try {
               const up = await uploadPdf("student-files", id, f);
-              const t = title.value.trim() || baseName(f.name).replace(/\d{10}/, "").replace(/^[\s\-–_]+|[\s\-–_]+$/g, "") || "ملف";
+              const t = title.value.trim() || baseName(f.name).replace(/\d{4,20}/, "").replace(/^[\s\-–_]+|[\s\-–_]+$/g, "") || "ملف";
               const { error } = await sb.from("student_files").insert({ national_id: id, title: t, path: up.path, url: up.url });
               if (error) throw error;
               done++;
@@ -921,7 +956,7 @@
             h("button", { class: "btn sm ghost", onclick: () => navigator.clipboard && navigator.clipboard.writeText(resultLink(e.code)) }, "نسخ الرابط"))),
         h("h3", null, "رصد إجابات ورقية"),
         h("div", null, nid, ...ans, h("button", { class: "btn sm", style: "margin-top:8px", onclick: async () => {
-          const n = toLatinDigits(nid.value); if (!/^\d{10}$/.test(n)) return alert("رقم الهوية ١٠ أرقام.");
+          const n = toLatinDigits(nid.value).trim(); if (!/^\d{1,20}$/.test(n)) return alert("اكتب رقم الهوية بالأرقام فقط.");
           const answers = e.sections.map((s, i) => { const t = [...ans[i].value.replace(/ـ/g, "").replace(/ا|إ|آ/g, "أ").replace(/ه/g, "د")]; return s.questions.map((_, j) => { const k = CTEST.LETTERS.indexOf(t[j]); return k >= 0 ? k : null; }); });
           const an = CTEST.analyze(e.sections, answers);
           const { error } = await sb.from("custom_results").upsert({ exam_id: e.id, national_id: n, answers, score: an.score, total: an.total, percent: an.pct, source: "paper" }, { onConflict: "exam_id,national_id" });
