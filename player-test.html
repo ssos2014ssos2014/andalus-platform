@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>اختبار مشغّل المقاطع</title>
+<style>body{font-family:Tahoma,sans-serif;margin:0;padding:14px;background:#f6f7f5;color:#13293d}h1{font-size:20px}.t{background:#fff;border:1px solid #d7e0e4;border-radius:12px;padding:10px;margin:10px 0}.t h2{font-size:15px;margin:0 0 6px}video{width:100%;max-height:220px;background:#000;border-radius:8px}.r{font-weight:700;font-size:16px;margin-top:6px}.ok{color:#2c7a55}.bad{color:#b5523c}.wait{color:#c38b2a}small{color:#6b7f8e}</style></head>
+<body>
+<h1>🔧 اختبار تشغيل مقاطع Drive</h1>
+<p><small>افتح هذه الصفحة من الجوال، انتظر ٢٠ ثانية، ثم صوّر الشاشة كاملة وأرسلها.</small></p>
+<p id="dev"><small></small></p>
+<div id="list"></div>
+<script>
+const ID = new URLSearchParams(location.search).get("id") || "11lm-3DrDUb3mgjmZ5bS48TrS8Op_tSZa";
+const KEY = new URLSearchParams(location.search).get("key");
+document.querySelector("#dev small").textContent = navigator.userAgent;
+const tests = [
+  ["أ) مباشر مع CORS", `https://drive.usercontent.google.com/download?id=${ID}&export=download&confirm=t`, true],
+  ["ب) مباشر بدون CORS", `https://drive.usercontent.google.com/download?id=${ID}&export=download&confirm=t&b=1`, false],
+  ["ج) رابط uc القديم", `https://drive.google.com/uc?export=download&id=${ID}&confirm=t`, true],
+];
+if (KEY) tests.push(["د) Drive API بمفتاح", `https://www.googleapis.com/drive/v3/files/${ID}?alt=media&key=${KEY}`, true]);
+const list = document.getElementById("list");
+for (const [name, url, cors] of tests) {
+  const box = document.createElement("div"); box.className = "t";
+  const v = document.createElement("video"); v.controls = true; v.playsInline = true; v.preload = "metadata"; if (cors) v.crossOrigin = "anonymous"; v.src = url;
+  const r = document.createElement("div"); r.className = "r wait"; r.textContent = "⏳ جارٍ الاختبار…";
+  box.innerHTML = `<h2>${name}</h2>`; box.append(v, r); list.append(box);
+  const t0 = Date.now(); let done = false;
+  v.addEventListener("loadedmetadata", () => { done = true; r.className = "r ok"; r.textContent = `✅ يعمل — المدة ${Math.round(v.duration / 60)} دقيقة (${((Date.now() - t0) / 1000).toFixed(1)} ث)`; });
+  v.addEventListener("error", () => { done = true; r.className = "r bad"; r.textContent = `❌ لا يعمل — رمز ${v.error ? v.error.code : "?"}`; });
+  setTimeout(() => { if (!done) { r.className = "r wait"; r.textContent = "⏸ لم يبدأ التحميل تلقائيًا — اضغط تشغيل في هذا المقطع"; } }, 15000);
+}
+const f = document.createElement("div"); f.className = "t"; f.innerHTML = `<h2>هـ) مشغّل Drive الحالي (للمقارنة)</h2><iframe src="https://drive.google.com/file/d/${ID}/preview" style="width:100%;height:200px;border:0" allow="autoplay; fullscreen"></iframe>`; list.append(f);
+</script></body></html>

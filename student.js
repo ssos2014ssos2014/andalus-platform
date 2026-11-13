@@ -519,7 +519,8 @@
       allow: "autoplay; fullscreen; encrypted-media; picture-in-picture", allowfullscreen: true, title: `${l.title} — ${part.label}`, "data-k": S.vkey || 0 }));
     if (part.url && !(part.drive_id && (driveMode() || (S.vfail || {})[`${l.id}:${S.part}`]))) return smartVideo({ src: part.url });
     if (driveDirect(l.id, S.part, part)) return smartVideo({ src: ddUrl(part.drive_id), crossorigin: "anonymous", "data-dd": "1" });
-    return h("div", { class: "video" },
+    const why = (S.vfail || {})[`${l.id}:${S.part}`] && S.vfailWhy;
+    return h("div", { class: "video" + (why ? " vf" : "") }, why && h("div", { class: "vf-note" }, `تعذّر تشغيل المقطع بمشغّل المنصة في هذا الجهاز (رمز ${S.vfailWhy})، فتم فتحه بمشغّل Drive.`),
       h("iframe", { src: `https://drive.google.com/file/d/${encodeURIComponent(part.drive_id)}/preview${bm ? "?t=" + bm + "s" : ""}`, allow: "autoplay; fullscreen; encrypted-media", allowfullscreen: true, title: `${l.title} — ${part.label}`, referrerpolicy: "strict-origin-when-cross-origin", "data-k": S.vkey || 0 }),
       h("div", { class: "drive-shield", "aria-hidden": "true" }));
   }
@@ -555,8 +556,13 @@
     const pt = (l0 && l0.parts || [])[part] || {};
     if (pt.drive_id) {
       const viaDrive = v.dataset.dd === "1";
-      const fb = () => { videoFallback(lid, part, viaDrive); if (viaDrive) { const b = document.querySelector(".bmark"); if (b && S.view === "lecture" && S.lid === lid) b.replaceWith(playerBar(lecture(lid))); } };
-      v.addEventListener("error", fb, { once: true });
+      const fb = () => { S.vfailWhy = `${v.error ? v.error.code : "timeout"}${v.dataset.try === "2" ? "b" : "a"}`; videoFallback(lid, part, viaDrive); if (viaDrive) { const b = document.querySelector(".bmark"); if (b && S.view === "lecture" && S.lid === lid) b.replaceWith(playerBar(lecture(lid))); } };
+      // محاولة ثانية بطريقة طلب مختلفة قبل الرجوع إلى نافذة Drive
+      const onErr = () => {
+        if (viaDrive && v.dataset.try !== "2") { v.dataset.try = "2"; v.removeAttribute("crossorigin"); const src = v.getAttribute("src"); v.src = src + "&t2=1"; v.load(); v.addEventListener("error", fb, { once: true }); return; }
+        fb();
+      };
+      v.addEventListener("error", onErr, { once: true });
       ["loadedmetadata", "loadeddata", "canplay", "playing"].forEach(ev => v.addEventListener(ev, () => { loaded = true; }, { once: true }));
       // على الجوال (خاصة آيفون ووضع توفير البيانات) لا يبدأ تحميل المقطع إلا بعد ضغط التشغيل،
       // لذلك لا نحكم بالفشل إلا بعد أن يطلب الطالب التشغيل ولا يصل شيء خلال ٢٥ ثانية

@@ -804,3 +804,5 @@ sup.ex { font-size: .68em; vertical-align: .6em; line-height: 0; margin-inline-s
 @media (max-width: 560px) { .sp-time { display: none; } .sp-btn { min-width: 34px; font-size: 14px; } .sp-big { width: 62px; height: 62px; } }
 
 .sp-big svg { width: 34px; height: 34px; } .sp-btn { display: inline-grid; place-items: center; } .sp-btn svg { width: 24px; height: 24px; }
+
+.vf-note { position: absolute; top: 0; left: 0; right: 0; z-index: 3; background: rgba(180,60,40,.92); color: #fff; font-size: 12px; padding: 4px 8px; text-align: center; pointer-events: none; }
