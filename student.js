@@ -440,8 +440,10 @@
 
   // تشغيل ملف Drive نفسه داخل مشغّل الفيديو (بدل نافذة المعاينة) ليُقرأ الوقت بالثانية ويُعرف انتهاء المقطع.
   // إن تعذّر (حصة التنزيل في Drive أو المتصفح) يعود تلقائيًا إلى نافذة معاينة Drive.
-  const ddUrl = id => `https://drive.usercontent.google.com/download?id=${encodeURIComponent(id)}&export=download&confirm=t`;
-  const driveDirect = (lid, pi, part) => !!(part && part.drive_id && !part.youtube_id && (S.pub || {}).drive_direct !== false && !(S.vfail || {})[`${lid}:${pi}`]);
+  // التشغيل المباشر من Drive يحتاج مفتاح Google Drive API (في config.js)، لأن Google يمنع روابط التنزيل العادية داخل مشغّل المتصفح
+  const DKEY = (window.APP_CONFIG || {}).DRIVE_API_KEY || "";
+  const ddUrl = id => `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(id)}?alt=media&supportsAllDrives=true&key=${encodeURIComponent(DKEY)}`;
+  const driveDirect = (lid, pi, part) => !!(part && part.drive_id && !part.youtube_id && DKEY && (S.pub || {}).drive_direct !== false && !(S.vfail || {})[`${lid}:${pi}`]);
   // ---------- مشغّل مخصص سلس للجوال والكمبيوتر: تشغيل/إيقاف، تقديم وترجيع ١٠ ثوانٍ، شريط تقدم، سرعة، ملء الشاشة ----------
   function smartVideo(attrs) {
     const v = h("video", { id: "vid", ...attrs, playsinline: true, "webkit-playsinline": true, "x5-playsinline": true, preload: "metadata", controlslist: "nodownload noremoteplayback", disablepictureinpicture: true, oncontextmenu: e => e.preventDefault() });
@@ -522,7 +524,17 @@
     const why = (S.vfail || {})[`${l.id}:${S.part}`] && S.vfailWhy;
     return h("div", { class: "video" + (why ? " vf" : "") }, why && h("div", { class: "vf-note" }, `تعذّر تشغيل المقطع بمشغّل المنصة في هذا الجهاز (رمز ${S.vfailWhy})، فتم فتحه بمشغّل Drive.`),
       h("iframe", { src: `https://drive.google.com/file/d/${encodeURIComponent(part.drive_id)}/preview${bm ? "?t=" + bm + "s" : ""}`, allow: "autoplay; fullscreen; encrypted-media", allowfullscreen: true, title: `${l.title} — ${part.label}`, referrerpolicy: "strict-origin-when-cross-origin", "data-k": S.vkey || 0 }),
-      h("div", { class: "drive-shield", "aria-hidden": "true" }));
+      h("div", { class: "drive-shield", "aria-hidden": "true" }), driveFsBtn());
+  }
+  // زر ملء الشاشة الخاص بالمنصة فوق مشغّل Drive (يعمل على الجوال أفضل من زر Drive)
+  function driveFsBtn() {
+    const b = h("button", { class: "dfs", type: "button", "aria-label": "ملء الشاشة" }); b.innerHTML = '<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor"><path d="M4 4h6v2H6v4H4zm10 0h6v6h-2V6h-4zM4 14h2v4h4v2H4zm14 0h2v6h-6v-2h4z"/></svg>';
+    b.onclick = async e => { e.stopPropagation(); const box = b.closest(".video"); const on = document.fullscreenElement || document.webkitFullscreenElement;
+      try { if (on) { await (document.exitFullscreen ? document.exitFullscreen() : document.webkitExitFullscreen()); return; }
+        if (box.requestFullscreen) await box.requestFullscreen({ navigationUI: "hide" }); else if (box.webkitRequestFullscreen) box.webkitRequestFullscreen(); else { box.classList.toggle("pseudo-fs"); document.body.classList.toggle("no-scroll"); return; }
+        try { await screen.orientation.lock("landscape"); } catch {}
+      } catch { box.classList.toggle("pseudo-fs"); document.body.classList.toggle("no-scroll"); } };
+    return b;
   }
   // قراءة الوقت من المشغّل مباشرة وإيقافه (يوتيوب وملفات الفيديو فقط؛ Drive لا يسمح بذلك)
   let YTW = null, YTF = null;
