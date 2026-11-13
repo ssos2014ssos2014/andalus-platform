@@ -557,8 +557,10 @@
       const viaDrive = v.dataset.dd === "1";
       const fb = () => { videoFallback(lid, part, viaDrive); if (viaDrive) { const b = document.querySelector(".bmark"); if (b && S.view === "lecture" && S.lid === lid) b.replaceWith(playerBar(lecture(lid))); } };
       v.addEventListener("error", fb, { once: true });
-      v.addEventListener("loadeddata", () => { loaded = true; }, { once: true });
-      setTimeout(() => { if (!loaded && v.isConnected && (v.networkState === 3 || (viaDrive && v.readyState === 0))) fb(); }, viaDrive ? 20000 : 15000);
+      ["loadedmetadata", "loadeddata", "canplay", "playing"].forEach(ev => v.addEventListener(ev, () => { loaded = true; }, { once: true }));
+      // على الجوال (خاصة آيفون ووضع توفير البيانات) لا يبدأ تحميل المقطع إلا بعد ضغط التشغيل،
+      // لذلك لا نحكم بالفشل إلا بعد أن يطلب الطالب التشغيل ولا يصل شيء خلال ٢٥ ثانية
+      v.addEventListener("play", () => { setTimeout(() => { if (!loaded && v.isConnected && v.readyState === 0) fb(); }, 25000); }, { once: true });
     }
     const save = t => { if (!S.nid) return; setLocalPos(lid, part, t); API.savePosition(S.nid, lid, part, t, Math.floor(v.duration || 0) || null).catch(() => {}); };
     v.addEventListener("loadedmetadata", () => { if (start && start < (v.duration || 1e9) - 3) { try { v.currentTime = start; } catch {} } }, { once: true });
