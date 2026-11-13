@@ -441,7 +441,71 @@
   // تشغيل ملف Drive نفسه داخل مشغّل الفيديو (بدل نافذة المعاينة) ليُقرأ الوقت بالثانية ويُعرف انتهاء المقطع.
   // إن تعذّر (حصة التنزيل في Drive أو المتصفح) يعود تلقائيًا إلى نافذة معاينة Drive.
   const ddUrl = id => `https://drive.usercontent.google.com/download?id=${encodeURIComponent(id)}&export=download&confirm=t`;
-  const driveDirect = (lid, pi, part) => !!(part && part.drive_id && !part.youtube_id && (S.pub || {}).drive_direct === true && !(S.vfail || {})[`${lid}:${pi}`]);
+  const driveDirect = (lid, pi, part) => !!(part && part.drive_id && !part.youtube_id && (S.pub || {}).drive_direct !== false && !(S.vfail || {})[`${lid}:${pi}`]);
+  // ---------- مشغّل مخصص سلس للجوال والكمبيوتر: تشغيل/إيقاف، تقديم وترجيع ١٠ ثوانٍ، شريط تقدم، سرعة، ملء الشاشة ----------
+  function smartVideo(attrs) {
+    const v = h("video", { id: "vid", ...attrs, playsinline: true, "webkit-playsinline": true, "x5-playsinline": true, preload: "metadata", controlslist: "nodownload noremoteplayback", disablepictureinpicture: true, oncontextmenu: e => e.preventDefault() });
+    const fmt = t => { t = Math.max(0, Math.floor(t || 0)); const hh = Math.floor(t / 3600), m = Math.floor(t / 60) % 60, x = t % 60; return (hh ? hh + ":" + String(m).padStart(2, "0") : m) + ":" + String(x).padStart(2, "0"); };
+    const SV = d => `<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-hidden="true">${d}</svg>`;
+    const icon = { play: SV('<path d="M8 5v14l11-7z"/>'), pause: SV('<path d="M6 5h4v14H6zM14 5h4v14h-4z"/>'),
+      back: SV('<path d="M12 5V2L7 6l5 4V7a6 6 0 1 1-6 6H4a8 8 0 1 0 8-8z"/><text x="12" y="16" font-size="7" text-anchor="middle" font-family="sans-serif" font-weight="700">10</text>'),
+      fwd: SV('<path d="M12 5V2l5 4-5 4V7a6 6 0 1 0 6 6h2a8 8 0 1 1-8-8z"/><text x="12" y="16" font-size="7" text-anchor="middle" font-family="sans-serif" font-weight="700">10</text>'),
+      fs: SV('<path d="M4 4h6v2H6v4H4zm10 0h6v6h-2V6h-4zM4 14h2v4h4v2H4zm14 0h2v6h-6v-2h4z"/>'), fsx: SV('<path d="M8 4h2v6H4V8h4zm6 0h2v4h4v2h-6zM4 14h6v6H8v-4H4zm10 0h6v2h-4v4h-2z"/>') };
+    const setI = (el, k) => { el.innerHTML = icon[k]; };
+    const big = h("button", { class: "sp-big", type: "button", "aria-label": "تشغيل" }); setI(big, "play");
+    const spin = h("div", { class: "sp-spin", hidden: true });
+    const flashL = h("div", { class: "sp-flash l" }, "− ١٠ ث"), flashR = h("div", { class: "sp-flash r" }, "+ ١٠ ث");
+    const pp = h("button", { class: "sp-btn", type: "button", "aria-label": "تشغيل أو إيقاف" }); setI(pp, "play");
+    const back = h("button", { class: "sp-btn", type: "button", "aria-label": "رجوع ١٠ ثوانٍ" }); setI(back, "back");
+    const fwd = h("button", { class: "sp-btn", type: "button", "aria-label": "تقديم ١٠ ثوانٍ" }); setI(fwd, "fwd");
+    const cur = h("span", { class: "sp-time" }, "0:00"), dur = h("span", { class: "sp-time" }, "0:00");
+    const bar = h("input", { class: "sp-bar", type: "range", min: 0, max: 1000, step: 1, value: 0, "aria-label": "شريط المقطع" });
+    const speeds = [1, 1.25, 1.5, 1.75, 2, 0.75]; let si = 0;
+    const spd = h("button", { class: "sp-btn sp-spd", type: "button", "aria-label": "سرعة التشغيل" }, "1×");
+    const fs = h("button", { class: "sp-btn", type: "button", "aria-label": "ملء الشاشة" }); setI(fs, "fs");
+    const ctrls = h("div", { class: "sp-ctrls", dir: "ltr" }, pp, back, fwd, cur, bar, dur, spd, fs);
+    const box = h("div", { class: "video sp show" }, v, spin, flashL, flashR, big, ctrls);
+    let hideT = null, dragging = false;
+    const show = (keep) => { box.classList.add("show"); clearTimeout(hideT); if (!keep && !v.paused) hideT = setTimeout(() => box.classList.remove("show"), 3000); };
+    const toggle = () => { if (v.paused || v.ended) { const p = v.play(); if (p && p.catch) p.catch(() => {}); } else v.pause(); };
+    const seek = d => { if (!isFinite(v.duration)) return; v.currentTime = Math.min(Math.max(0, v.currentTime + d), v.duration - 0.5); const f = d < 0 ? flashL : flashR; f.classList.remove("on"); void f.offsetWidth; f.classList.add("on"); show(); };
+    const sync = () => { const p = !v.paused && !v.ended; setI(pp, p ? "pause" : "play"); setI(big, p ? "pause" : "play"); box.classList.toggle("playing", p); };
+    v.addEventListener("play", () => { sync(); show(); }); v.addEventListener("pause", () => { sync(); show(true); }); v.addEventListener("ended", () => { sync(); show(true); });
+    v.addEventListener("waiting", () => { spin.hidden = false; }); ["playing", "canplay", "seeked", "pause"].forEach(ev => v.addEventListener(ev, () => { spin.hidden = true; }));
+    v.addEventListener("loadedmetadata", () => { dur.textContent = fmt(v.duration); });
+    v.addEventListener("timeupdate", () => { cur.textContent = fmt(v.currentTime); if (!dragging && isFinite(v.duration) && v.duration) bar.value = Math.round(v.currentTime / v.duration * 1000); });
+    bar.addEventListener("input", () => { dragging = true; if (isFinite(v.duration)) cur.textContent = fmt(bar.value / 1000 * v.duration); show(true); });
+    bar.addEventListener("change", () => { if (isFinite(v.duration)) v.currentTime = bar.value / 1000 * v.duration; dragging = false; show(); });
+    pp.onclick = e => { e.stopPropagation(); toggle(); }; big.onclick = e => { e.stopPropagation(); toggle(); };
+    back.onclick = e => { e.stopPropagation(); seek(-10); }; fwd.onclick = e => { e.stopPropagation(); seek(10); };
+    spd.onclick = e => { e.stopPropagation(); si = (si + 1) % speeds.length; v.playbackRate = speeds[si]; spd.textContent = speeds[si] + "×"; show(); };
+    const isFs = () => document.fullscreenElement === box || document.webkitFullscreenElement === box;
+    fs.onclick = async e => {
+      e.stopPropagation();
+      try {
+        if (isFs()) { await (document.exitFullscreen ? document.exitFullscreen() : document.webkitExitFullscreen()); return; }
+        if (box.requestFullscreen) await box.requestFullscreen({ navigationUI: "hide" });
+        else if (box.webkitRequestFullscreen) box.webkitRequestFullscreen();
+        else if (v.webkitEnterFullscreen) { v.webkitEnterFullscreen(); return; } // آيفون: ملء الشاشة بمشغّل النظام
+        try { await screen.orientation.lock("landscape"); } catch {}
+      } catch { if (v.webkitEnterFullscreen) try { v.webkitEnterFullscreen(); } catch {} }
+    };
+    const onFs = () => { box.classList.toggle("fs", isFs()); setI(fs, isFs() ? "fsx" : "fs"); if (!isFs()) { try { screen.orientation.unlock(); } catch {} } };
+    document.addEventListener("fullscreenchange", onFs); document.addEventListener("webkitfullscreenchange", onFs);
+    // لمسة واحدة تُظهر الأزرار أو تخفيها، ولمستان على اليمين أو اليسار تقدّمان أو ترجعان ١٠ ثوانٍ
+    let lastTap = 0, tapT = null;
+    box.addEventListener("click", e => {
+      if (e.target.closest(".sp-ctrls") || e.target === big) return;
+      const now = Date.now(), r = box.getBoundingClientRect(), x = (e.clientX - r.left) / r.width;
+      if (now - lastTap < 300) { clearTimeout(tapT); lastTap = 0; if (x < 0.4) seek(-10); else if (x > 0.6) seek(10); else toggle(); return; }
+      lastTap = now; tapT = setTimeout(() => { if (box.classList.contains("show") && !v.paused) box.classList.remove("show"); else show(); }, 280);
+    });
+    box.addEventListener("mousemove", () => show());
+    box.tabIndex = 0;
+    box.addEventListener("keydown", e => { if (e.key === " " || e.key === "k") { e.preventDefault(); toggle(); } else if (e.key === "ArrowRight") seek(10); else if (e.key === "ArrowLeft") seek(-10); else if (e.key === "f") fs.onclick(e); });
+    return box;
+  }
+
   function player(l, part) {
     if (!part || !(part.youtube_id || part.url || part.drive_id)) {
       return h("div", { class: "video poster" }, h("div", { class: "poster-inner" },
@@ -453,8 +517,8 @@
     const bm = S.seek && S.seek.lid === l.id && S.seek.part === S.part ? S.seek.t : posOf(l);
     if (part.youtube_id) return h("div", { class: "video" }, h("iframe", { id: "yt-frame", src: `https://www.youtube-nocookie.com/embed/${encodeURIComponent(part.youtube_id)}?rel=0&modestbranding=1&playsinline=1&enablejsapi=1&origin=${encodeURIComponent(location.origin)}${bm ? "&start=" + bm : ""}`,
       allow: "autoplay; fullscreen; encrypted-media; picture-in-picture", allowfullscreen: true, title: `${l.title} — ${part.label}`, "data-k": S.vkey || 0 }));
-    if (part.url && !(part.drive_id && (driveMode() || (S.vfail || {})[`${l.id}:${S.part}`]))) return h("div", { class: "video" }, h("video", { id: "vid", src: part.url, controls: true, playsinline: true, "webkit-playsinline": true, preload: "metadata", controlslist: "nodownload", oncontextmenu: e => e.preventDefault() }));
-    if (driveDirect(l.id, S.part, part)) return h("div", { class: "video" }, h("video", { id: "vid", src: ddUrl(part.drive_id), crossorigin: "anonymous", "data-dd": "1", controls: true, playsinline: true, "webkit-playsinline": true, preload: "metadata", controlslist: "nodownload", oncontextmenu: e => e.preventDefault() }));
+    if (part.url && !(part.drive_id && (driveMode() || (S.vfail || {})[`${l.id}:${S.part}`]))) return smartVideo({ src: part.url });
+    if (driveDirect(l.id, S.part, part)) return smartVideo({ src: ddUrl(part.drive_id), crossorigin: "anonymous", "data-dd": "1" });
     return h("div", { class: "video" },
       h("iframe", { src: `https://drive.google.com/file/d/${encodeURIComponent(part.drive_id)}/preview${bm ? "?t=" + bm + "s" : ""}`, allow: "autoplay; fullscreen; encrypted-media", allowfullscreen: true, title: `${l.title} — ${part.label}`, referrerpolicy: "strict-origin-when-cross-origin", "data-k": S.vkey || 0 }),
       h("div", { class: "drive-shield", "aria-hidden": "true" }));

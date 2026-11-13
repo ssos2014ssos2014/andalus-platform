@@ -780,3 +780,27 @@ sup.ex { font-size: .68em; vertical-align: .6em; line-height: 0; margin-inline-s
 .rp-ans span { border-radius: 8px; padding: 5px 10px; } .rp-ans .bad { background: #fdecea; color: #a93226; } .rp-ans .good { background: #e9f7ef; color: #1e8449; }
 .rp-steps { line-height: 1.9; }
 @media (max-width: 560px) { .rp-bar { grid-template-columns: 1fr 50px; } .rp-lbl { grid-column: 1 / -1; } }
+
+/* ---------- المشغّل المخصص ---------- */
+.video.sp { position: relative; background: #000; overflow: hidden; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+.video.sp video { width: 100%; height: 100%; display: block; object-fit: contain; background: #000; }
+.video.sp.fs { width: 100vw; height: 100vh; max-width: none; border-radius: 0; }
+.sp-big { position: absolute; inset: 0; margin: auto; width: 72px; height: 72px; border-radius: 50%; border: 0; background: rgba(0,0,0,.55); color: #fff; cursor: pointer; transition: opacity .2s; display: grid; place-items: center; }
+.sp-ctrls { position: absolute; left: 0; right: 0; bottom: 0; display: flex; align-items: center; gap: 6px; padding: 18px 10px 8px; background: linear-gradient(transparent, rgba(0,0,0,.75)); transition: opacity .2s; }
+.video.sp:not(.show) .sp-ctrls, .video.sp:not(.show) .sp-big { opacity: 0; pointer-events: none; }
+.video.sp.playing .sp-big { opacity: 0; pointer-events: none; }
+.video.sp.playing.show .sp-big { opacity: .9; pointer-events: auto; }
+.sp-btn { background: transparent; border: 0; color: #fff; font: 700 15px/1 system-ui, sans-serif; min-width: 38px; height: 38px; border-radius: 8px; cursor: pointer; padding: 0 6px; }
+.sp-btn:active { background: rgba(255,255,255,.18); }
+.sp-spd { font-size: 13px; }
+.sp-time { color: #fff; font: 600 12px/1 system-ui, sans-serif; min-width: 38px; text-align: center; font-variant-numeric: tabular-nums; }
+.sp-bar { flex: 1; min-width: 60px; accent-color: #e0ad52; height: 28px; cursor: pointer; }
+.sp-spin { position: absolute; inset: 0; margin: auto; width: 46px; height: 46px; border: 4px solid rgba(255,255,255,.3); border-top-color: #fff; border-radius: 50%; animation: spRot .8s linear infinite; pointer-events: none; }
+@keyframes spRot { to { transform: rotate(360deg); } }
+.sp-flash { position: absolute; top: 50%; transform: translateY(-50%); color: #fff; font: 800 18px/1 system-ui, sans-serif; background: rgba(0,0,0,.45); padding: 14px 16px; border-radius: 40px; opacity: 0; pointer-events: none; }
+.sp-flash.l { left: 12%; } .sp-flash.r { right: 12%; }
+.sp-flash.on { animation: spFlash .6s ease-out; }
+@keyframes spFlash { 0% { opacity: 1; } 100% { opacity: 0; } }
+@media (max-width: 560px) { .sp-time { display: none; } .sp-btn { min-width: 34px; font-size: 14px; } .sp-big { width: 62px; height: 62px; } }
+
+.sp-big svg { width: 34px; height: 34px; } .sp-btn { display: inline-grid; place-items: center; } .sp-btn svg { width: 24px; height: 24px; }
